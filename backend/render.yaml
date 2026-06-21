@@ -3,10 +3,13 @@ services:
     name: user-realtime-jury-api
     runtime: python
     rootDir: backend
+    plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PMS_OPENAI_BASE_URL
-        value: https://api.openai.com/v1
+        value: https://www.highland-api.top/v1
       - key: PMS_DEFAULT_MODEL
-        value: gpt-4.1-mini
+        value: gpt-5.5
+      - key: PMS_OPENAI_API_KEY
+        value: sk-iaa1GrCU0gsaCe9vKSkWKW1DtJwqlB5wAWEvXzLQQ4jqZwdF
