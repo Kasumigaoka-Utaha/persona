@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: user-realtime-jury-api
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PMS_OPENAI_BASE_URL
+        value: https://api.openai.com/v1
+      - key: PMS_DEFAULT_MODEL
+        value: gpt-4.1-mini
