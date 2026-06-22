@@ -1,9 +1,12 @@
 const DEFAULT_API_BASE = import.meta.env.DEV
   ? 'http://localhost:8000/api'
-  : 'https://persona-production-efaf.up.railway.app/api'
+  : '/api'
 
 function normalizeApiBase(value: string | undefined) {
   const raw = (value || DEFAULT_API_BASE).trim().replace(/\/+$/, '')
+  if (import.meta.env.PROD && (!value || raw.includes('railway'))) {
+    return '/api'
+  }
   if (raw.startsWith('/')) {
     return raw
   }
