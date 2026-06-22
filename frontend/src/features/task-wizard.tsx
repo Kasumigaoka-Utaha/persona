@@ -6,6 +6,7 @@ import { api } from '../api'
 import { Badge, Button, Card, GhostButton, Input, Label, SectionTitle, Textarea } from '../components/ui'
 import type { AudienceDefinition, ManualAudienceInput } from '../types/api'
 import { cn } from '../lib/utils'
+import { FALLBACK_AUDIENCES, FALLBACK_DEMO_DOCUMENT } from '../data/fallbacks'
 
 type CustomAudience = ManualAudienceInput & {
   key: string
@@ -86,6 +87,7 @@ export function TaskWizardPage() {
   const [selectedAudienceKeys, setSelectedAudienceKeys] = useState<string[]>([])
   const [selectedCustomKeys, setSelectedCustomKeys] = useState<string[]>([])
   const [customAudiences, setCustomAudiences] = useState<CustomAudience[]>([])
+  const [composerOpen, setComposerOpen] = useState(false)
   const [draftChips, setDraftChips] = useState<string[]>([])
   const [editingCustomKey, setEditingCustomKey] = useState<string | null>(null)
   const [detail, setDetail] = useState<AudienceDetail | null>(null)
@@ -100,11 +102,22 @@ export function TaskWizardPage() {
   }, [])
 
   useEffect(() => {
-    if (documentQuery.data) {
-      setDocumentTitle(documentQuery.data.title)
-      setDocumentContent(documentQuery.data.content)
+    const document = documentQuery.data ?? (documentQuery.isError ? FALLBACK_DEMO_DOCUMENT : null)
+    if (document) {
+      setDocumentTitle(document.title)
+      setDocumentContent(document.content)
     }
-  }, [documentQuery.data])
+  }, [documentQuery.data, documentQuery.isError])
+
+  const audienceSource = useMemo(() => {
+    const data = audiencesQuery.data ?? []
+    return data.length ? data : FALLBACK_AUDIENCES
+  }, [audiencesQuery.data])
+
+  const selectedFallbackAudiences = useMemo(
+    () => audienceSource.filter((item) => item.source === 'frontend_fallback' && selectedAudienceKeys.includes(item.key)),
+    [audienceSource, selectedAudienceKeys],
+  )
 
   const runAnalysisMutation = useMutation({
     mutationFn: async () => {
@@ -118,15 +131,24 @@ export function TaskWizardPage() {
           dropoff_points: parseLines(audience.dropoff_points),
           content_preferences: parseLines(audience.content_preferences),
         }))
+      const fallbackManualAudiences = selectedFallbackAudiences.map((audience) => ({
+        name: audience.name,
+        definition: audience.definition,
+        conversion_trait: audience.behavior_summary.conversion_trait,
+        dwell_trait: audience.behavior_summary.dwell_trait,
+        dropoff_points: audience.behavior_summary.dropoff_points,
+        content_preferences: audience.behavior_summary.content_preferences,
+      }))
+      const selectedBackendKeys = selectedAudienceKeys.filter((key) => !selectedFallbackAudiences.some((audience) => audience.key === key))
       return api.runAnalysis({
         document: {
           title: documentTitle.trim(),
           content: documentContent.trim(),
-          host: documentQuery.data?.host ?? 'mock_feishu',
+          host: documentQuery.data?.host ?? FALLBACK_DEMO_DOCUMENT.host,
           source_mode: 'host',
         },
-        selected_audience_keys: selectedAudienceKeys,
-        manual_audiences: manualAudiences,
+        selected_audience_keys: selectedBackendKeys,
+        manual_audiences: [...fallbackManualAudiences, ...manualAudiences],
       })
     },
     onSuccess: async (job) => {
@@ -139,12 +161,19 @@ export function TaskWizardPage() {
   })
 
   const selectedAudiences = useMemo(
-    () => (audiencesQuery.data ?? []).filter((item) => selectedAudienceKeys.includes(item.key)),
-    [audiencesQuery.data, selectedAudienceKeys],
+    () => audienceSource.filter((item) => selectedAudienceKeys.includes(item.key)),
+    [audienceSource, selectedAudienceKeys],
   )
 
   const totalAudienceCount = selectedAudienceKeys.length + selectedCustomKeys.length
   const canRun = documentTitle.trim().length > 0 && documentContent.trim().length >= 20 && totalAudienceCount >= 1 && totalAudienceCount <= 5
+  const disabledReason = !documentTitle.trim() || documentContent.trim().length < 20
+    ? '文档未加载完成'
+    : totalAudienceCount < 1
+      ? '请先选择至少 1 个陪审团标签'
+      : totalAudienceCount > 5
+        ? '最多选择 5 个用户群'
+        : ''
 
   const toggleAudience = async (key: string) => {
     setSelectedAudienceKeys((current) => {
@@ -188,12 +217,14 @@ export function TaskWizardPage() {
       setCustomAudiences((current) => [...current, { key, chips: draftChips, ...buildManualAudience(name, draftChips) }])
     }
     setDraftChips([])
+    setComposerOpen(false)
     await safeLogEvent('jury_custom_audience_completed', { chip_count: draftChips.length })
   }
 
   const editCustomAudience = (audience: CustomAudience) => {
     setDraftChips(audience.chips)
     setEditingCustomKey(audience.key)
+    setComposerOpen(true)
     setDetail(null)
   }
 
@@ -204,6 +235,7 @@ export function TaskWizardPage() {
     if (editingCustomKey === key) {
       setEditingCustomKey(null)
       setDraftChips([])
+      setComposerOpen(false)
     }
   }
 
@@ -226,6 +258,7 @@ export function TaskWizardPage() {
     ])
     setDraftChips(chips)
     setEditingCustomKey(key)
+    setComposerOpen(true)
     setDetail(null)
   }
 
@@ -287,51 +320,67 @@ export function TaskWizardPage() {
 
           <div className="mt-6 space-y-5">
             <Card className="p-4">
-              <SectionTitle title={editingCustomKey ? '编辑自定义标签组合' : '组合自定义标签'} description="点击多个单独标签生成临时人格，完成后会出现在下方陪审团区域。" />
-              <div className="mt-4 space-y-4">
-                {TAG_GROUPS.map((group) => (
-                  <div key={group.name}>
-                    <div className="mb-2 text-xs font-medium text-slate-500">{group.name}</div>
-                    <div className="flex flex-wrap gap-2">
-                      {group.values.map((chip) => {
-                        const active = draftChips.includes(chip)
-                        return (
-                          <button
-                            key={chip}
-                            type="button"
-                            onClick={() => toggleDraftChip(chip)}
-                            className={cn(
-                              'rounded-full border px-3 py-1.5 text-xs font-medium transition',
-                              active ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-400',
-                            )}
-                          >
-                            {chip}
-                          </button>
-                        )
-                      })}
+              <div className="flex items-start justify-between gap-3">
+                <SectionTitle title={editingCustomKey ? '编辑自定义标签组合' : '自定义标签组合'} description="平常默认收起，需要时点击创建或编辑。" />
+                <GhostButton
+                  onClick={() => setComposerOpen((value) => !value)}
+                  className="shrink-0"
+                >
+                  {composerOpen ? '收起' : '创建自定义标签'}
+                </GhostButton>
+              </div>
+              {!composerOpen ? (
+                <div className="mt-3 text-sm text-slate-500">
+                  已创建 {customAudiences.length} 个自定义标签；点击上方按钮展开组合器。
+                </div>
+              ) : (
+                <>
+                  <div className="mt-4 space-y-4">
+                    {TAG_GROUPS.map((group) => (
+                      <div key={group.name}>
+                        <div className="mb-2 text-xs font-medium text-slate-500">{group.name}</div>
+                        <div className="flex flex-wrap gap-2">
+                          {group.values.map((chip) => {
+                            const active = draftChips.includes(chip)
+                            return (
+                              <button
+                                key={chip}
+                                type="button"
+                                onClick={() => toggleDraftChip(chip)}
+                                className={cn(
+                                  'rounded-full border px-3 py-1.5 text-xs font-medium transition',
+                                  active ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-400',
+                                )}
+                              >
+                                {chip}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-4 flex items-center justify-between gap-3">
+                    <div className="text-xs text-slate-500">已组合 {draftChips.length} 个标签</div>
+                    <div className="flex gap-2">
+                      {editingCustomKey ? (
+                        <GhostButton onClick={() => { setEditingCustomKey(null); setDraftChips([]); setComposerOpen(false) }}>
+                          取消编辑
+                        </GhostButton>
+                      ) : null}
+                      <Button disabled={!draftChips.length} onClick={() => void completeCustomAudience()}>
+                        完成组合
+                      </Button>
                     </div>
                   </div>
-                ))}
-              </div>
-              <div className="mt-4 flex items-center justify-between gap-3">
-                <div className="text-xs text-slate-500">已组合 {draftChips.length} 个标签</div>
-                <div className="flex gap-2">
-                  {editingCustomKey ? (
-                    <GhostButton onClick={() => { setEditingCustomKey(null); setDraftChips([]) }}>
-                      取消编辑
-                    </GhostButton>
-                  ) : null}
-                  <Button disabled={!draftChips.length} onClick={() => void completeCustomAudience()}>
-                    完成组合
-                  </Button>
-                </div>
-              </div>
+                </>
+              )}
             </Card>
 
             <div>
               <SectionTitle title="选择陪审团" description="点击标签卡片选择参与陪审；点击详情可查看、编辑或删除标签。" />
               <div className="mt-3 grid gap-3">
-                {(audiencesQuery.data ?? []).map((audience) => {
+                {audienceSource.map((audience) => {
                   const active = selectedAudienceKeys.includes(audience.key)
                   const atLimit = !active && totalAudienceCount >= 5
                   return (
@@ -452,10 +501,18 @@ export function TaskWizardPage() {
           ) : null}
 
           <div className="mt-6 flex justify-end">
-            <Button disabled={!canRun || runAnalysisMutation.isPending} onClick={() => runAnalysisMutation.mutate()}>
-              {runAnalysisMutation.isPending ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
-              开始审判 / 生成报告
-            </Button>
+            <div className="flex flex-col items-end gap-2">
+              <Button
+                className={cn(canRun && !runAnalysisMutation.isPending && 'cursor-pointer shadow-lg shadow-slate-900/15 hover:-translate-y-0.5 hover:bg-blue-700')}
+                disabled={!canRun || runAnalysisMutation.isPending}
+                onClick={() => runAnalysisMutation.mutate()}
+                title={!canRun ? disabledReason : '开始生成陪审团报告'}
+              >
+                {runAnalysisMutation.isPending ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
+                开始审判 / 生成报告
+              </Button>
+              {!canRun ? <div className="text-xs text-slate-500">{disabledReason}</div> : null}
+            </div>
           </div>
         </aside>
       </div>
