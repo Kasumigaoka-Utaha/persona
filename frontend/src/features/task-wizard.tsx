@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { AlertTriangle, Check, LoaderCircle, PanelRightClose, PanelRightOpen, Pencil, RefreshCcw, Scale, Trash2, X } from 'lucide-react'
+import { AlertTriangle, Check, LoaderCircle, Pencil, RefreshCcw, Trash2, X } from 'lucide-react'
 import { api } from '../api'
 import { Badge, Button, Card, GhostButton, Input, Label, SectionTitle, Textarea } from '../components/ui'
 import type { AudienceDefinition, ManualAudienceInput } from '../types/api'
@@ -83,7 +83,6 @@ async function safeLogEvent(event_name: string, payload: Record<string, unknown>
 
 export function TaskWizardPage() {
   const navigate = useNavigate()
-  const [panelOpen, setPanelOpen] = useState(true)
   const [selectedAudienceKeys, setSelectedAudienceKeys] = useState<string[]>([])
   const [selectedCustomKeys, setSelectedCustomKeys] = useState<string[]>([])
   const [customAudiences, setCustomAudiences] = useState<CustomAudience[]>([])
@@ -267,7 +266,7 @@ export function TaskWizardPage() {
     <div className="relative min-h-[78vh] overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-sm">
       <div className="grid min-h-[78vh] lg:grid-cols-[1.2fr_0.8fr]">
         <section className="border-r border-slate-200 bg-[#f5f7fb] p-6 lg:p-8">
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start gap-4">
             <div>
               <Badge className="bg-blue-100 text-blue-700">Mock Feishu Document</Badge>
               <h1 className="mt-4 text-3xl font-semibold tracking-tight text-slate-900">用户实时陪审团</h1>
@@ -275,10 +274,6 @@ export function TaskWizardPage() {
                 模拟 PM 在飞书文档内写 PRD 时，点击右侧“陪审团”胶囊，直接选择目标用户群并生成模块级风险判断报告。
               </p>
             </div>
-            <GhostButton onClick={() => setPanelOpen((value) => !value)}>
-              {panelOpen ? <PanelRightClose className="mr-2 h-4 w-4" /> : <PanelRightOpen className="mr-2 h-4 w-4" />}
-              {panelOpen ? '收起侧边栏' : '展开侧边栏'}
-            </GhostButton>
           </div>
 
           <Card className="mt-6 p-5">
@@ -301,11 +296,8 @@ export function TaskWizardPage() {
           </Card>
         </section>
 
-        <aside className={cn('relative bg-white p-6 lg:p-8', !panelOpen && 'hidden lg:block')}>
+        <aside className="relative bg-white p-6 lg:p-8">
           <div className="flex items-start gap-3">
-            <div className="rounded-2xl bg-slate-900 p-2 text-white">
-              <Scale className="h-5 w-5" />
-            </div>
             <div>
               <div className="text-lg font-semibold text-slate-900">陪审团</div>
               <p className="mt-1 text-sm text-slate-500">选择 2-5 个目标用户群，生成“行为判断 + CTR/UV/PV 风险评级 + 风险指数”报告。</p>
