@@ -25,9 +25,10 @@ SYSTEM_PROMPT = """
 必须遵守：
 1. 先写行为判断，再写风险评级。
 2. 风险只允许输出 red / yellow / green，对应 CTR / UV / PV。
-3. 不允许输出任何优化建议、行动建议、实验建议、具体数值、百分比或 baseline。
-4. 语言必须具体，使用“可能/倾向于/更容易/较难”等表述。
-5. 所有输出必须是合法 JSON，且字段完整。
+3. 允许输出 metric_scores，表示 0-100 的风险指数；它不是线上真实 CTR/UV/PV 百分比，也不是 baseline。
+4. 不允许输出任何优化建议、行动建议或实验建议。
+5. 语言必须具体，使用“可能/倾向于/更容易/较难”等表述。
+6. 所有输出必须是合法 JSON，且字段完整。
 """.strip()
 
 
@@ -212,7 +213,7 @@ class PredictionService:
             "document": job_meta,
             "module": module,
             "audience": audience,
-            "goal": "输出该用户群在当前模块上的行为判断与 CTR/UV/PV 风险等级，不要给建议或数字。",
+            "goal": "输出该用户群在当前模块上的行为判断、CTR/UV/PV 风险等级和 0-100 风险指数，不要给建议。",
             "schema": {
                 "audience_key": "string",
                 "audience_name": "string",
@@ -225,6 +226,11 @@ class PredictionService:
                     "ctr": "red|yellow|green",
                     "uv": "red|yellow|green",
                     "pv": "red|yellow|green",
+                },
+                "metric_scores": {
+                    "ctr": "0-100 integer risk index, not real CTR percentage",
+                    "uv": "0-100 integer risk index, not real UV percentage",
+                    "pv": "0-100 integer risk index, not real PV percentage",
                 },
                 "risk_reason": "string",
             },
@@ -272,10 +278,31 @@ class PredictionService:
         allowed = {"red", "yellow", "green"}
         if {risk_ratings.get("ctr"), risk_ratings.get("uv"), risk_ratings.get("pv")} - allowed:
             return fallback
-        text_blob = json.dumps(result, ensure_ascii=False)
+        metric_scores = result.get("metric_scores")
+        if not isinstance(metric_scores, dict):
+            result["metric_scores"] = fallback["metric_scores"]
+        else:
+            clean_scores: dict[str, int] = {}
+            for metric in ("ctr", "uv", "pv"):
+                value = metric_scores.get(metric)
+                if not isinstance(value, int) or value < 0 or value > 100:
+                    return fallback
+                clean_scores[metric] = value
+            result["metric_scores"] = clean_scores
+        text_blob = json.dumps({key: value for key, value in result.items() if key != "metric_scores"}, ensure_ascii=False)
         if re.search(r"\d+\s*%", text_blob):
             return fallback
         return result
+
+    def _score_from_risk(self, risk: str, audience_name: str, module_text: str) -> int:
+        base = {"green": 20, "yellow": 55, "red": 85}[risk]
+        if any(keyword in audience_name for keyword in ("低耐心", "快速", "冲动", "沉默")):
+            base += 6
+        if any(keyword in audience_name for keyword in ("信任", "谨慎", "隐私", "售后")):
+            base += 4
+        if any(keyword in module_text for keyword in ("规则", "授权", "支付", "隐私", "售后")):
+            base += 5
+        return max(0, min(100, base))
 
     def _fallback_module_audience(self, module: dict[str, str], audience: dict[str, Any]) -> dict[str, Any]:
         text = module["module_text"]
@@ -317,6 +344,11 @@ class PredictionService:
                 "wont_do": wont,
             },
             "risk_ratings": {"ctr": ctr, "uv": uv, "pv": pv},
+            "metric_scores": {
+                "ctr": self._score_from_risk(ctr, audience["name"], text),
+                "uv": self._score_from_risk(uv, audience["name"], text),
+                "pv": self._score_from_risk(pv, audience["name"], text),
+            },
             "risk_reason": reason,
         }
 

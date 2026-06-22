@@ -69,11 +69,18 @@ class RiskRatings(BaseModel):
     pv: RiskGrade
 
 
+class MetricScores(BaseModel):
+    ctr: int = Field(ge=0, le=100)
+    uv: int = Field(ge=0, le=100)
+    pv: int = Field(ge=0, le=100)
+
+
 class AudienceModuleResult(BaseModel):
     audience_key: str
     audience_name: str
     behavior: BehaviorPrediction
     risk_ratings: RiskRatings
+    metric_scores: MetricScores = Field(default_factory=lambda: MetricScores(ctr=0, uv=0, pv=0))
     risk_reason: str
 
 

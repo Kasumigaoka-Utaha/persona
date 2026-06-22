@@ -49,11 +49,18 @@ export type RiskRatings = {
   pv: 'red' | 'yellow' | 'green'
 }
 
+export type MetricScores = {
+  ctr: number
+  uv: number
+  pv: number
+}
+
 export type AudienceModuleResult = {
   audience_key: string
   audience_name: string
   behavior: BehaviorPrediction
   risk_ratings: RiskRatings
+  metric_scores: MetricScores
   risk_reason: string
 }
 

@@ -5,6 +5,40 @@ import { Download, LoaderCircle } from 'lucide-react'
 import { api } from '../api'
 import { Badge, Button, Card, SectionTitle } from '../components/ui'
 import { divergenceLabel, riskEmoji, riskLabel } from '../lib/utils'
+import type { AudienceModuleResult } from '../types/api'
+
+function scoreTone(value: number) {
+  if (value >= 75) return 'bg-red-500'
+  if (value >= 45) return 'bg-amber-400'
+  return 'bg-emerald-500'
+}
+
+function MetricBars({ item }: { item: AudienceModuleResult }) {
+  const metrics = [
+    { key: 'ctr', label: 'CTR', value: item.metric_scores?.ctr ?? 0 },
+    { key: 'uv', label: 'UV', value: item.metric_scores?.uv ?? 0 },
+    { key: 'pv', label: 'PV', value: item.metric_scores?.pv ?? 0 },
+  ]
+  return (
+    <div className="space-y-2">
+      {metrics.map((metric) => (
+        <div key={metric.key} className="grid grid-cols-[40px_1fr_42px] items-center gap-2 text-xs">
+          <span className="font-medium text-slate-500">{metric.label}</span>
+          <div className="h-2.5 overflow-hidden rounded-full bg-slate-200">
+            <div className={scoreTone(metric.value)} style={{ width: `${metric.value}%`, height: '100%' }} />
+          </div>
+          <span className="text-right font-semibold text-slate-700">{metric.value}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function averageScore(item: AudienceModuleResult) {
+  const scores = item.metric_scores
+  if (!scores) return 0
+  return Math.round((scores.ctr + scores.uv + scores.pv) / 3)
+}
 
 export function PredictionResultPage() {
   const params = useParams()
@@ -48,13 +82,20 @@ export function PredictionResultPage() {
 
   const job = query.data
   const result = job.result
+  const topRiskItem = result
+    ? result.modules.flatMap((module) => module.audience_results.map((item) => ({
+        moduleTitle: module.module_title,
+        audienceName: item.audience_name,
+        score: averageScore(item),
+      }))).sort((a, b) => b.score - a.score)[0]
+    : null
 
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-semibold text-slate-900">陪审团分析报告</h1>
-          <p className="mt-2 text-sm text-slate-500">行为判断在前，风险评级在后；仅用于方向性分析，不代表真实线上结果。</p>
+          <p className="mt-2 text-sm text-slate-500">行为判断在前，风险评级在后；风险指数为 0-100 方向性估算，不代表真实线上百分比。</p>
         </div>
         <div className="flex gap-3">
           <Badge className="bg-slate-900 text-white">{job.status}</Badge>
@@ -127,7 +168,7 @@ export function PredictionResultPage() {
           </Card>
 
           <section className="space-y-4">
-            <SectionTitle title="二、分用户群模块分析" description="按 PRD 模块逐项输出行为判断与 CTR/UV/PV 风险。" />
+            <SectionTitle title="二、分用户群模块分析" description="按 PRD 模块逐项输出行为判断、CTR/UV/PV 风险等级与风险指数。" />
             <div className="space-y-4">
               {result.modules.map((module) => (
                 <Card key={module.module_key} className="p-6">
@@ -155,6 +196,10 @@ export function PredictionResultPage() {
                           <div className="rounded-2xl bg-slate-50 p-3">
                             <div className="font-medium text-slate-900">风险评级</div>
                             <div className="mt-2">CTR {riskEmoji(item.risk_ratings.ctr)} · UV {riskEmoji(item.risk_ratings.uv)} · PV {riskEmoji(item.risk_ratings.pv)}</div>
+                            <div className="mt-3">
+                              <div className="mb-2 text-xs font-medium text-slate-500">风险指数</div>
+                              <MetricBars item={item} />
+                            </div>
                             <div className="mt-2 text-slate-500">原因：{item.risk_reason}</div>
                           </div>
                         </div>
@@ -168,7 +213,7 @@ export function PredictionResultPage() {
 
           <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
             <Card className="p-6">
-              <SectionTitle title="三、多用户群对比汇总表" description="帮助快速识别不同用户群之间的高分歧模块。" />
+              <SectionTitle title="三、多用户群对比汇总表" description="帮助快速识别不同用户群之间的高分歧模块；单元格数字为 CTR/UV/PV 平均风险指数。" />
               <div className="mt-4 overflow-x-auto">
                 <table className="min-w-full border-separate border-spacing-y-2 text-sm">
                   <thead>
@@ -184,9 +229,20 @@ export function PredictionResultPage() {
                     {result.comparison_table.map((row) => (
                       <tr key={row.module_key} className="rounded-2xl bg-slate-50 text-slate-700">
                         <td className="rounded-l-2xl px-3 py-3 font-medium text-slate-900">{row.module_title}</td>
-                        {row.audiences.map((cell) => (
-                          <td key={`${row.module_key}-${cell.audience_key}`} className="px-3 py-3">{riskEmoji(cell.overall_risk)}</td>
-                        ))}
+                        {row.audiences.map((cell) => {
+                          const moduleResult = result.modules
+                            .find((module) => module.module_key === row.module_key)
+                            ?.audience_results.find((item) => item.audience_key === cell.audience_key)
+                          const score = moduleResult ? averageScore(moduleResult) : 0
+                          return (
+                            <td key={`${row.module_key}-${cell.audience_key}`} className="px-3 py-3">
+                              <div className="flex items-center gap-2">
+                                <span>{riskEmoji(cell.overall_risk)}</span>
+                                <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-slate-700">{score}</span>
+                              </div>
+                            </td>
+                          )
+                        })}
                         <td className="rounded-r-2xl px-3 py-3">{divergenceLabel(row.divergence_level)}</td>
                       </tr>
                     ))}
@@ -218,6 +274,7 @@ export function PredictionResultPage() {
                 <div className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
                   <div><span className="font-medium text-slate-900">高风险模块：</span>{result.conclusion.high_risk_modules.join('、') || '无'}</div>
                   <div><span className="font-medium text-slate-900">高分歧模块：</span>{result.conclusion.high_divergence_modules.join('、') || '无'}</div>
+                  <div><span className="font-medium text-slate-900">最高风险指数：</span>{topRiskItem ? `${topRiskItem.moduleTitle} / ${topRiskItem.audienceName} / ${topRiskItem.score}` : '无'}</div>
                   <div><span className="font-medium text-slate-900">覆盖用户群：</span>{result.conclusion.covered_audiences.join('、') || '无'}</div>
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">

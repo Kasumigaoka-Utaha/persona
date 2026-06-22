@@ -26,6 +26,7 @@ def test_render_markdown_report() -> None:
                                     "wont_do": "不会细读",
                                 },
                                 "risk_ratings": {"ctr": "red", "uv": "yellow", "pv": "yellow"},
+                                "metric_scores": {"ctr": 88, "uv": 55, "pv": 52},
                                 "risk_reason": "认知成本偏高",
                             }
                         ],
@@ -54,4 +55,5 @@ def test_render_markdown_report() -> None:
     assert "AI 陪审团判断" in markdown
     assert "入口设计" in markdown
     assert "🔴" in markdown
+    assert "CTR 88" in markdown
     assert "高分歧" in markdown

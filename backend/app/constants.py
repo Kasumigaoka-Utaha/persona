@@ -61,6 +61,114 @@ DEFAULT_AUDIENCES = [
         },
         "source": "seeded",
     },
+    {
+        "key": "risk_averse_cautious_user",
+        "name": "谨慎型风险规避用户",
+        "definition": "对试错成本敏感，遇到不确定或不可逆操作时倾向观望。",
+        "behavior_summary": {
+            "conversion_trait": "只有风险边界清楚、可退出时才可能继续行动。",
+            "dwell_trait": "会停留阅读关键规则，但不一定转化。",
+            "dropoff_points": ["不可逆操作", "风险说明缺失", "退出路径不清", "催促式文案"],
+            "content_preferences": ["风险说明", "取消入口", "保障边界", "确认提示"],
+        },
+        "source": "seeded",
+    },
+    {
+        "key": "rule_confused_user",
+        "name": "规则理解困难用户",
+        "definition": "面对多条件、多门槛、多步骤规则时容易误解或放弃。",
+        "behavior_summary": {
+            "conversion_trait": "规则被简化为明确结论时更可能继续。",
+            "dwell_trait": "停留可能不短，但多用于困惑式阅读。",
+            "dropoff_points": ["多条件叠加", "术语过多", "跨页面解释", "结果不确定"],
+            "content_preferences": ["步骤化说明", "明确结论", "示例", "进度提示"],
+        },
+        "source": "seeded",
+    },
+    {
+        "key": "review_dependent_user",
+        "name": "评价依赖型用户",
+        "definition": "决策高度依赖他人评价、真实反馈和群体选择信号。",
+        "behavior_summary": {
+            "conversion_trait": "真实评价和群体信号会明显增强转化。",
+            "dwell_trait": "愿意花时间阅读评价和对比反馈。",
+            "dropoff_points": ["评价缺失", "评价质量低", "反馈不可信", "无法筛选重点"],
+            "content_preferences": ["评价摘要", "真实反馈", "对比信息", "用户案例"],
+        },
+        "source": "seeded",
+    },
+    {
+        "key": "after_sales_anxious_user",
+        "name": "售后焦虑型用户",
+        "definition": "购买或参与前重点关注退换、客服、赔付和问题处理路径。",
+        "behavior_summary": {
+            "conversion_trait": "清楚的售后承诺和服务路径会提升行动意愿。",
+            "dwell_trait": "会停留查看保障、规则和服务入口。",
+            "dropoff_points": ["售后规则隐藏", "客服入口难找", "退换边界模糊", "责任归属不清"],
+            "content_preferences": ["售后保障", "客服入口", "退换说明", "赔付规则"],
+        },
+        "source": "seeded",
+    },
+    {
+        "key": "promotion_sensitive_user",
+        "name": "促销敏感薅羊毛用户",
+        "definition": "对优惠、红包、满减和限时利益高度敏感，愿意为明确收益行动。",
+        "behavior_summary": {
+            "conversion_trait": "明确优惠力度和可领取权益能强力驱动点击。",
+            "dwell_trait": "愿意停留计算利益，但对虚假优惠很敏感。",
+            "dropoff_points": ["优惠门槛高", "权益解释不清", "领取失败", "价格前后不一致"],
+            "content_preferences": ["优惠明细", "倒计时", "领取状态", "可用范围"],
+        },
+        "source": "seeded",
+    },
+    {
+        "key": "quality_rational_user",
+        "name": "品质理性决策用户",
+        "definition": "重视品质、参数、口碑和长期价值，不轻易被低价驱动。",
+        "behavior_summary": {
+            "conversion_trait": "品质证据、参数对比和口碑信息能提升转化。",
+            "dwell_trait": "停留较长，倾向深度阅读。",
+            "dropoff_points": ["信息浅", "参数缺失", "证据不足", "只强调低价"],
+            "content_preferences": ["品质说明", "参数对比", "长评", "专业背书"],
+        },
+        "source": "seeded",
+    },
+    {
+        "key": "old_path_habit_user",
+        "name": "老客习惯路径用户",
+        "definition": "熟悉旧流程，对路径变化、新入口和新规则有惯性抵触。",
+        "behavior_summary": {
+            "conversion_trait": "与原有习惯兼容时更容易接受新能力。",
+            "dwell_trait": "遇到变化会短暂停留确认，但耐心有限。",
+            "dropoff_points": ["入口迁移", "命名变化", "路径重组", "旧能力被隐藏"],
+            "content_preferences": ["熟悉位置", "延续性提示", "状态保留", "轻量变化"],
+        },
+        "source": "seeded",
+    },
+    {
+        "key": "privacy_sensitive_user",
+        "name": "隐私敏感用户",
+        "definition": "对授权、个人信息、位置、通讯录和数据用途高度敏感。",
+        "behavior_summary": {
+            "conversion_trait": "权限用途明确、可拒绝、可撤回时更可能继续。",
+            "dwell_trait": "会停留查看隐私说明，但容易中断。",
+            "dropoff_points": ["强制授权", "用途不清", "默认勾选", "隐私入口难找"],
+            "content_preferences": ["权限解释", "隐私说明", "可选授权", "撤回路径"],
+        },
+        "source": "seeded",
+    },
+    {
+        "key": "low_activity_observer",
+        "name": "低活跃沉默观望用户",
+        "definition": "很少互动或购买，对大多数入口无感，需要强相关信号才会行动。",
+        "behavior_summary": {
+            "conversion_trait": "强相关需求和低门槛入口才可能触发行动。",
+            "dwell_trait": "停留短，容易跳过非刚需信息。",
+            "dropoff_points": ["相关性弱", "入口普通", "价值不明确", "需要主动探索"],
+            "content_preferences": ["强相关推荐", "低干扰提示", "明确收益", "轻量操作"],
+        },
+        "source": "seeded",
+    },
 ]
 
 DEMO_DOCUMENT_FALLBACK = """# 用户实时陪审团 Demo 文档
@@ -78,5 +186,5 @@ DEMO_DOCUMENT_FALLBACK = """# 用户实时陪审团 Demo 文档
 系统按 PRD 模块输出每个用户群的行为判断，并对 CTR、UV、PV 给出风险评级。报告支持多用户群对比，并标记分歧最大的模块。
 
 ## 风险说明
-输出仅用于判断和答辩辅助，不提供优化建议，也不提供具体数值预测。
+输出仅用于判断和答辩辅助，不提供优化建议；风险指数是方向性估算，不代表真实线上百分比。
 """

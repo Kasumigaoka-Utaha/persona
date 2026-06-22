@@ -6,7 +6,7 @@ export function AppLayout() {
     <div className="min-h-screen bg-slate-100 text-slate-900">
       <header className="border-b border-slate-200 bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-          <Link to="/" className="flex items-center gap-3">
+          <Link to="/app" className="flex items-center gap-3">
             <div className="rounded-2xl bg-slate-900 p-2 text-white">
               <Scale className="h-5 w-5" />
             </div>
@@ -16,7 +16,7 @@ export function AppLayout() {
             </div>
           </Link>
           <nav className="flex items-center gap-2">
-            <NavLink to="/" className={({ isActive }) => `rounded-xl px-3 py-2 text-sm ${isActive ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}>
+            <NavLink to="/app" className={({ isActive }) => `rounded-xl px-3 py-2 text-sm ${isActive ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}>
               <span className="inline-flex items-center gap-2"><PanelRightDashed className="h-4 w-4" />陪审团面板</span>
             </NavLink>
           </nav>

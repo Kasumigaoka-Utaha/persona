@@ -37,6 +37,10 @@ def render_markdown_report(job: AnalysisJob) -> str:
                     f"CTR {RISK_EMOJI[audience['risk_ratings']['ctr']]} / "
                     f"UV {RISK_EMOJI[audience['risk_ratings']['uv']]} / "
                     f"PV {RISK_EMOJI[audience['risk_ratings']['pv']]}",
+                    "  - 风险指数："
+                    f"CTR {audience.get('metric_scores', {}).get('ctr', '-')} / "
+                    f"UV {audience.get('metric_scores', {}).get('uv', '-')} / "
+                    f"PV {audience.get('metric_scores', {}).get('pv', '-')}",
                     f"  - 风险原因：{audience['risk_reason']}",
                 ]
             )
