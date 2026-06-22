@@ -88,6 +88,7 @@ export function TaskWizardPage() {
   const [selectedCustomKeys, setSelectedCustomKeys] = useState<string[]>([])
   const [customAudiences, setCustomAudiences] = useState<CustomAudience[]>([])
   const [composerOpen, setComposerOpen] = useState(false)
+  const [juryOpen, setJuryOpen] = useState(true)
   const [draftChips, setDraftChips] = useState<string[]>([])
   const [editingCustomKey, setEditingCustomKey] = useState<string | null>(null)
   const [detail, setDetail] = useState<AudienceDetail | null>(null)
@@ -378,70 +379,81 @@ export function TaskWizardPage() {
             </Card>
 
             <div>
-              <SectionTitle title="选择陪审团" description="点击标签卡片选择参与陪审；点击详情可查看、编辑或删除标签。" />
-              <div className="mt-3 grid gap-3">
-                {audienceSource.map((audience) => {
-                  const active = selectedAudienceKeys.includes(audience.key)
-                  const atLimit = !active && totalAudienceCount >= 5
-                  return (
-                    <div
-                      key={audience.key}
-                      className={cn(
-                        'rounded-2xl border p-4 transition',
-                        active ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white',
-                        atLimit && 'opacity-60',
-                      )}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <button type="button" disabled={atLimit} onClick={() => void toggleAudience(audience.key)} className="min-w-0 flex-1 text-left disabled:cursor-not-allowed">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">{audience.name}</span>
-                            {active ? <Check className="h-4 w-4 shrink-0" /> : null}
-                          </div>
-                          <div className={cn('mt-1 max-h-10 overflow-hidden text-sm', active ? 'text-slate-200' : 'text-slate-500')}>{audience.definition}</div>
-                        </button>
-                        <GhostButton
-                          className={cn('shrink-0 px-3 py-1.5 text-xs', active && 'border-slate-500 bg-slate-800 text-white hover:bg-slate-700')}
-                          onClick={() => setDetail({ type: 'default', audience })}
-                        >
-                          详情
-                        </GhostButton>
-                      </div>
-                    </div>
-                  )
-                })}
-
-                {customAudiences.map((audience) => {
-                  const active = selectedCustomKeys.includes(audience.key)
-                  const atLimit = !active && totalAudienceCount >= 5
-                  return (
-                    <div
-                      key={audience.key}
-                      className={cn(
-                        'rounded-2xl border p-4 transition',
-                        active ? 'border-violet-700 bg-violet-700 text-white' : 'border-violet-200 bg-violet-50',
-                        atLimit && 'opacity-60',
-                      )}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <button type="button" disabled={atLimit} onClick={() => void toggleCustomAudience(audience.key)} className="min-w-0 flex-1 text-left disabled:cursor-not-allowed">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">{audience.name}</span>
-                            {active ? <Check className="h-4 w-4 shrink-0" /> : null}
-                          </div>
-                          <div className={cn('mt-1 max-h-10 overflow-hidden text-sm', active ? 'text-violet-100' : 'text-violet-700')}>{audience.chips.join('、')}</div>
-                        </button>
-                        <GhostButton
-                          className={cn('shrink-0 px-3 py-1.5 text-xs', active && 'border-violet-300 bg-violet-800 text-white hover:bg-violet-700')}
-                          onClick={() => setDetail({ type: 'custom', audience })}
-                        >
-                          详情
-                        </GhostButton>
-                      </div>
-                    </div>
-                  )
-                })}
+              <div className="flex items-start justify-between gap-3">
+                <SectionTitle title="选择陪审团" description="点击标签卡片选择参与陪审；点击详情可查看、编辑或删除标签。" />
+                <GhostButton onClick={() => setJuryOpen((value) => !value)} className="shrink-0">
+                  {juryOpen ? '收起' : '展开'}
+                </GhostButton>
               </div>
+              {!juryOpen ? (
+                <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+                  已收起陪审团选择区；当前已选 {totalAudienceCount}/5 个用户群。
+                </div>
+              ) : (
+                <div className="mt-3 grid gap-3">
+                  {audienceSource.map((audience) => {
+                    const active = selectedAudienceKeys.includes(audience.key)
+                    const atLimit = !active && totalAudienceCount >= 5
+                    return (
+                      <div
+                        key={audience.key}
+                        className={cn(
+                          'rounded-2xl border p-4 transition',
+                          active ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white',
+                          atLimit && 'opacity-60',
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <button type="button" disabled={atLimit} onClick={() => void toggleAudience(audience.key)} className="min-w-0 flex-1 text-left disabled:cursor-not-allowed">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{audience.name}</span>
+                              {active ? <Check className="h-4 w-4 shrink-0" /> : null}
+                            </div>
+                            <div className={cn('mt-1 max-h-10 overflow-hidden text-sm', active ? 'text-slate-200' : 'text-slate-500')}>{audience.definition}</div>
+                          </button>
+                          <GhostButton
+                            className={cn('shrink-0 px-3 py-1.5 text-xs', active && 'border-slate-500 bg-slate-800 text-white hover:bg-slate-700')}
+                            onClick={() => setDetail({ type: 'default', audience })}
+                          >
+                            详情
+                          </GhostButton>
+                        </div>
+                      </div>
+                    )
+                  })}
+
+                  {customAudiences.map((audience) => {
+                    const active = selectedCustomKeys.includes(audience.key)
+                    const atLimit = !active && totalAudienceCount >= 5
+                    return (
+                      <div
+                        key={audience.key}
+                        className={cn(
+                          'rounded-2xl border p-4 transition',
+                          active ? 'border-violet-700 bg-violet-700 text-white' : 'border-violet-200 bg-violet-50',
+                          atLimit && 'opacity-60',
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <button type="button" disabled={atLimit} onClick={() => void toggleCustomAudience(audience.key)} className="min-w-0 flex-1 text-left disabled:cursor-not-allowed">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{audience.name}</span>
+                              {active ? <Check className="h-4 w-4 shrink-0" /> : null}
+                            </div>
+                            <div className={cn('mt-1 max-h-10 overflow-hidden text-sm', active ? 'text-violet-100' : 'text-violet-700')}>{audience.chips.join('、')}</div>
+                          </button>
+                          <GhostButton
+                            className={cn('shrink-0 px-3 py-1.5 text-xs', active && 'border-violet-300 bg-violet-800 text-white hover:bg-violet-700')}
+                            onClick={() => setDetail({ type: 'custom', audience })}
+                          >
+                            详情
+                          </GhostButton>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           </div>
 
@@ -517,16 +529,6 @@ export function TaskWizardPage() {
         </aside>
       </div>
 
-      <button
-        type="button"
-        className="absolute right-4 top-1/2 hidden -translate-y-1/2 rounded-full bg-slate-900 px-4 py-3 text-sm font-medium text-white shadow-lg lg:flex lg:items-center lg:gap-2"
-        onClick={async () => {
-          setPanelOpen((value) => !value)
-          await safeLogEvent('jury_capsule_clicked', { action: panelOpen ? 'close' : 'open' })
-        }}
-      >
-        <Scale className="h-4 w-4" />陪审团
-      </button>
     </div>
   )
 }
