@@ -1,5 +1,5 @@
-import { Link, NavLink, Outlet } from 'react-router-dom'
-import { PanelRightDashed, Scale } from 'lucide-react'
+import { Link, Outlet } from 'react-router-dom'
+import { Scale } from 'lucide-react'
 
 export function AppLayout() {
   return (
@@ -15,11 +15,6 @@ export function AppLayout() {
               <div className="text-xs text-slate-500">Feishu PRD 陪审团 Demo</div>
             </div>
           </Link>
-          <nav className="flex items-center gap-2">
-            <NavLink to="/app" className={({ isActive }) => `rounded-xl px-3 py-2 text-sm ${isActive ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}>
-              <span className="inline-flex items-center gap-2"><PanelRightDashed className="h-4 w-4" />陪审团面板</span>
-            </NavLink>
-          </nav>
         </div>
       </header>
       <main className="mx-auto max-w-7xl px-6 py-8">
