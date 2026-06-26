@@ -5,7 +5,6 @@ backend/__pycache__/
 backend/.pytest_cache/
 backend/storage/
 backend/persona_metric_simulator.db
-figures/
 *.pyc
 .DS_Store
 .env

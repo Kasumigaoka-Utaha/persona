@@ -86,6 +86,18 @@ function metricDirection(value: number) {
   return { symbol: '↑', label: '提升', className: 'text-emerald-600' }
 }
 
+function moduleTitle(module: ModuleReport) {
+  if (!/^模块\s*\d+$/u.test(module.module_title.trim())) {
+    return module.module_title
+  }
+  const summary = module.module_summary
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^#{1,6}\s*/, '').replace(/^[-*+]\s*/, '').replace(/^\d+[.)、)]\s*/, '').trim())
+    .find(Boolean)
+  const topic = (summary ?? '内容概览').split(/[：:。；;，,]/)[0].trim().slice(0, 18)
+  return `${module.module_title.replace(/\s+/g, '')}：${topic || '内容概览'}`
+}
+
 function getTopRisk(result: JuryReportPayload, metrics: string[]) {
   return result.modules
     .flatMap((module) => module.audience_results.map((item) => ({
@@ -138,7 +150,7 @@ function IndicatorCard({ module, metrics }: { module: ModuleReport; metrics: str
             <FileText className="h-5 w-5" />
           </span>
           <div>
-            <div className="font-semibold text-slate-900">{module.module_title}</div>
+            <div className="font-semibold text-slate-900">{moduleTitle(module)}</div>
             <div className={cn('mt-1 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold', grade.badge)}>风险 {grade.label}</div>
           </div>
         </div>
@@ -166,7 +178,7 @@ function SuggestionCard({ module, item, index, metrics }: { module: ModuleReport
   const grade = riskGrade(score)
   return (
     <div className="rounded-2xl border border-white/70 bg-white p-4 shadow-sm">
-      <div className="font-semibold text-slate-900">{index + 1}. {module.module_title}</div>
+      <div className="font-semibold text-slate-900">{index + 1}. {moduleTitle(module)}</div>
       <div className="mt-3 grid gap-2 text-sm leading-6 text-slate-600">
         <div><span className="font-medium text-slate-900">为什么改</span> {item?.risk_reason ?? module.module_summary}</div>
         <div><span className="font-medium text-slate-900">怎么改</span> 降低理解门槛，强化入口说明、状态反馈和可信信息露出。</div>
@@ -292,7 +304,7 @@ export function PredictionResultPage() {
             <div>
               <div className="text-sm font-semibold text-slate-500">一句话结论</div>
               <div className="mt-2 text-xl font-semibold leading-8 text-slate-900">
-                {topRisk ? `${topRisk.module.module_title} 对 ${topRisk.item.audience_name} 风险最高。` : '整体风险可控。'}
+                {topRisk ? `${moduleTitle(topRisk.module)} 对 ${topRisk.item.audience_name} 风险最高。` : '整体风险可控。'}
               </div>
             </div>
           </div>
@@ -311,7 +323,7 @@ export function PredictionResultPage() {
             <div className="mt-3 flex items-center gap-3">
               <AlertTriangle className="h-8 w-8 text-red-500" />
               <div>
-                <div className="font-semibold text-slate-900">{topRisk?.module.module_title ?? '暂无'}</div>
+                <div className="font-semibold text-slate-900">{topRisk ? moduleTitle(topRisk.module) : '暂无'}</div>
                 <div className="mt-1 text-sm text-red-600">风险等级：{topRisk ? riskLabel(strongestRisk(topRisk.item, metrics)) : '-'}</div>
               </div>
             </div>
@@ -329,7 +341,7 @@ export function PredictionResultPage() {
             <div className="text-sm font-semibold text-slate-500">优先修改项</div>
             <div className="mt-3 flex items-center gap-3">
               <Badge className="bg-red-500 text-white">P0</Badge>
-              <div className="text-sm font-semibold leading-6 text-slate-900">{topRisk?.module.module_title ?? '暂无'}</div>
+              <div className="text-sm font-semibold leading-6 text-slate-900">{topRisk ? moduleTitle(topRisk.module) : '暂无'}</div>
             </div>
           </div>
         </div>
@@ -354,7 +366,7 @@ export function PredictionResultPage() {
                 <tr className="bg-slate-50 text-slate-500">
                   <th className="w-44 border-b border-r border-slate-200 px-4 py-3 text-left font-semibold">用户陪审团</th>
                   {result.modules.map((module) => (
-                    <th key={module.module_key} className="min-w-44 border-b border-r border-slate-200 px-4 py-3 text-center font-semibold">{module.module_title}</th>
+                    <th key={module.module_key} className="min-w-44 border-b border-r border-slate-200 px-4 py-3 text-center font-semibold">{moduleTitle(module)}</th>
                   ))}
                 </tr>
               </thead>

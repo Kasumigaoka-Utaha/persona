@@ -1,1 +1,1 @@
-export { TaskWizardPage as HomePage } from '../features/task-wizard'
+export { EntryPage as HomePage } from '../features/entry-page'

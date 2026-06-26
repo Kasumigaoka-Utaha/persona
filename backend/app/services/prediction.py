@@ -189,12 +189,29 @@ class PredictionService:
                 modules.append(
                     {
                         "module_key": f"module_{idx}",
-                        "module_title": f"模块 {idx}",
+                        "module_title": f"模块{idx}：{self._module_topic(paragraph)}",
                         "module_summary": paragraph[:300],
                         "module_text": paragraph[:3000],
                     }
                 )
         return modules[:8]
+
+    def _module_topic(self, text: str) -> str:
+        for line in text.splitlines():
+            candidate = line.strip()
+            if not candidate:
+                continue
+            candidate = re.sub(r"^#{1,6}\s*", "", candidate)
+            candidate = re.sub(r"^[-*+]\s*", "", candidate)
+            candidate = re.sub(r"^\d+[\.\)、)]\s*", "", candidate)
+            candidate = re.sub(r"[*_`>|#]", "", candidate).strip()
+            if not candidate:
+                continue
+            candidate = re.split(r"[：:。；;，,\n]", candidate, maxsplit=1)[0].strip()
+            if candidate:
+                return candidate[:18]
+        compact = re.sub(r"\s+", "", text)
+        return compact[:18] or "内容概览"
 
     def _slugify(self, text: str) -> str:
         normalized = re.sub(r"[^\w\u4e00-\u9fff]+", "_", text).strip("_").lower()
