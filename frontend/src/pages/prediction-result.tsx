@@ -22,6 +22,7 @@ import type { AudienceModuleResult, JuryReportPayload, ModuleReport } from '../t
 import { cn, riskLabel } from '../lib/utils'
 
 type RiskValue = 'red' | 'yellow' | 'green'
+const DEFAULT_METRICS = ['CTR', 'UV', 'PV']
 
 const voteMeta: Record<RiskValue, { label: string; color: string; bg: string; text: string }> = {
   green: { label: '支持', color: 'bg-emerald-500', bg: 'bg-emerald-50', text: 'text-emerald-700' },
@@ -35,21 +36,41 @@ const priorityMeta = [
   { title: '待验证项', className: 'border-slate-200 bg-slate-50 text-slate-700', badge: 'bg-slate-400 text-white' },
 ]
 
-function averageScore(item: AudienceModuleResult) {
+function reportMetrics(result: JuryReportPayload) {
+  return result.report_meta.selected_metrics?.length ? result.report_meta.selected_metrics : DEFAULT_METRICS
+}
+
+function itemMetricScores(item: AudienceModuleResult, metrics: string[]) {
+  if (item.selected_metric_scores && Object.keys(item.selected_metric_scores).length) {
+    return metrics.map((metric) => item.selected_metric_scores?.[metric] ?? 0)
+  }
   const scores = item.metric_scores
-  if (!scores) return 0
-  return Math.round((scores.ctr + scores.uv + scores.pv) / 3)
+  return [scores?.ctr ?? 0, scores?.uv ?? 0, scores?.pv ?? 0]
 }
 
-function moduleAverage(module: ModuleReport) {
+function itemMetricRatings(item: AudienceModuleResult, metrics: string[]) {
+  if (item.selected_metric_ratings && Object.keys(item.selected_metric_ratings).length) {
+    return metrics.map((metric) => item.selected_metric_ratings?.[metric] ?? 'yellow')
+  }
+  return [item.risk_ratings.ctr, item.risk_ratings.uv, item.risk_ratings.pv]
+}
+
+function averageScore(item: AudienceModuleResult, metrics: string[]) {
+  const scores = itemMetricScores(item, metrics)
+  if (!scores.length) return 0
+  return Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length)
+}
+
+function moduleAverage(module: ModuleReport, metrics: string[]) {
   if (!module.audience_results.length) return 0
-  return Math.round(module.audience_results.reduce((sum, item) => sum + averageScore(item), 0) / module.audience_results.length)
+  return Math.round(module.audience_results.reduce((sum, item) => sum + averageScore(item, metrics), 0) / module.audience_results.length)
 }
 
-function strongestRisk(item: AudienceModuleResult): RiskValue {
-  const entries = Object.entries(item.metric_scores ?? { ctr: 0, uv: 0, pv: 0 }) as Array<[keyof AudienceModuleResult['metric_scores'], number]>
-  const key = entries.sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'ctr'
-  return item.risk_ratings[key]
+function strongestRisk(item: AudienceModuleResult, metrics: string[]): RiskValue {
+  const scores = itemMetricScores(item, metrics)
+  const ratings = itemMetricRatings(item, metrics)
+  const index = scores.map((score, itemIndex) => ({ score, itemIndex })).sort((a, b) => b.score - a.score)[0]?.itemIndex ?? 0
+  return ratings[index] ?? 'yellow'
 }
 
 function riskGrade(score: number) {
@@ -65,29 +86,29 @@ function metricDirection(value: number) {
   return { symbol: '↑', label: '提升', className: 'text-emerald-600' }
 }
 
-function getTopRisk(result: JuryReportPayload) {
+function getTopRisk(result: JuryReportPayload, metrics: string[]) {
   return result.modules
     .flatMap((module) => module.audience_results.map((item) => ({
       module,
       item,
-      score: averageScore(item),
+      score: averageScore(item, metrics),
     })))
     .sort((a, b) => b.score - a.score)[0]
 }
 
-function getAffectedAudiences(result: JuryReportPayload) {
+function getAffectedAudiences(result: JuryReportPayload, metrics: string[]) {
   return result.report_meta.audiences
     .map((audience) => {
-      const scores = result.modules.flatMap((module) => module.audience_results.filter((item) => item.audience_name === audience).map(averageScore))
+      const scores = result.modules.flatMap((module) => module.audience_results.filter((item) => item.audience_name === audience).map((item) => averageScore(item, metrics)))
       const score = scores.length ? Math.round(scores.reduce((sum, value) => sum + value, 0) / scores.length) : 0
       return { audience, score }
     })
     .sort((a, b) => b.score - a.score)
 }
 
-function VoteBar({ item }: { item: AudienceModuleResult }) {
-  const risk = strongestRisk(item)
-  const supportWidth = Math.max(8, 100 - averageScore(item))
+function VoteBar({ item, metrics }: { item: AudienceModuleResult; metrics: string[] }) {
+  const risk = strongestRisk(item, metrics)
+  const supportWidth = Math.max(8, 100 - averageScore(item, metrics))
   const riskWidth = 100 - supportWidth
   return (
     <div className="flex h-8 overflow-hidden rounded-full bg-slate-100 text-xs font-semibold text-white">
@@ -101,13 +122,13 @@ function VoteBar({ item }: { item: AudienceModuleResult }) {
   )
 }
 
-function IndicatorCard({ module }: { module: ModuleReport }) {
-  const topItem = [...module.audience_results].sort((a, b) => averageScore(b) - averageScore(a))[0]
-  const score = moduleAverage(module)
+function IndicatorCard({ module, metrics }: { module: ModuleReport; metrics: string[] }) {
+  const topItem = [...module.audience_results].sort((a, b) => averageScore(b, metrics) - averageScore(a, metrics))[0]
+  const score = moduleAverage(module, metrics)
   const grade = riskGrade(score)
-  const ctrDirection = metricDirection(topItem?.metric_scores.ctr ?? score)
-  const uvDirection = metricDirection(topItem?.metric_scores.uv ?? score)
-  const pvDirection = metricDirection(topItem?.metric_scores.pv ?? score)
+  const displayMetrics = metrics.slice(0, 3)
+  const metricScores = topItem ? itemMetricScores(topItem, metrics) : []
+  const primaryDirection = metricDirection(metricScores[0] ?? score)
 
   return (
     <Card className="p-4 shadow-none">
@@ -123,7 +144,7 @@ function IndicatorCard({ module }: { module: ModuleReport }) {
         </div>
       </div>
       <div className="mt-4 space-y-2 text-sm leading-6 text-slate-600">
-        <div><span className="font-medium text-slate-900">方向假设</span> <span className={ctrDirection.className}>{ctrDirection.symbol}</span> {ctrDirection.label}</div>
+        <div><span className="font-medium text-slate-900">方向假设</span> <span className={primaryDirection.className}>{primaryDirection.symbol}</span> {primaryDirection.label}</div>
         <div><span className="font-medium text-slate-900">影响强度</span> <span className={grade.label === '高' ? 'text-red-600' : 'text-amber-600'}>{grade.label}</span></div>
         <div><span className="font-medium text-slate-900">置信度</span> 中</div>
         <div><span className="font-medium text-slate-900">关联用户</span> {topItem?.audience_name ?? '暂无'}</div>
@@ -131,16 +152,17 @@ function IndicatorCard({ module }: { module: ModuleReport }) {
         <div><span className="font-medium text-slate-900">行为链路</span> {topItem ? `${topItem.behavior.will_do} → ${topItem.behavior.get_stuck_at}` : module.module_summary}</div>
       </div>
       <div className="mt-4 grid grid-cols-3 gap-2 rounded-2xl bg-slate-50 p-3 text-center text-xs">
-        <div className={ctrDirection.className}>CTR {ctrDirection.symbol}</div>
-        <div className={uvDirection.className}>UV {uvDirection.symbol}</div>
-        <div className={pvDirection.className}>PV {pvDirection.symbol}</div>
+        {displayMetrics.map((metric, index) => {
+          const direction = metricDirection(metricScores[index] ?? score)
+          return <div key={metric} className={direction.className}>{metric} {direction.symbol}</div>
+        })}
       </div>
     </Card>
   )
 }
 
-function SuggestionCard({ module, item, index }: { module: ModuleReport; item?: AudienceModuleResult; index: number }) {
-  const score = item ? averageScore(item) : moduleAverage(module)
+function SuggestionCard({ module, item, index, metrics }: { module: ModuleReport; item?: AudienceModuleResult; index: number; metrics: string[] }) {
+  const score = item ? averageScore(item, metrics) : moduleAverage(module, metrics)
   const grade = riskGrade(score)
   return (
     <div className="rounded-2xl border border-white/70 bg-white p-4 shadow-sm">
@@ -148,7 +170,7 @@ function SuggestionCard({ module, item, index }: { module: ModuleReport; item?: 
       <div className="mt-3 grid gap-2 text-sm leading-6 text-slate-600">
         <div><span className="font-medium text-slate-900">为什么改</span> {item?.risk_reason ?? module.module_summary}</div>
         <div><span className="font-medium text-slate-900">怎么改</span> 降低理解门槛，强化入口说明、状态反馈和可信信息露出。</div>
-        <div><span className="font-medium text-slate-900">影响指标</span> CTR / UV / PV</div>
+        <div><span className="font-medium text-slate-900">影响指标</span> {metrics.join(' / ')}</div>
         <div><span className="font-medium text-slate-900">验证成本</span> {grade.label === '高' ? '低（A/B 测试 1-2 天）' : '中（设计 + 开发 2-3 天）'}</div>
       </div>
     </div>
@@ -222,11 +244,12 @@ export function PredictionResultPage() {
     )
   }
 
-  const topRisk = getTopRisk(result)
-  const overallScore = Math.round(result.modules.reduce((sum, module) => sum + moduleAverage(module), 0) / Math.max(result.modules.length, 1))
+  const metrics = reportMetrics(result)
+  const topRisk = getTopRisk(result, metrics)
+  const overallScore = Math.round(result.modules.reduce((sum, module) => sum + moduleAverage(module, metrics), 0) / Math.max(result.modules.length, 1))
   const overallGrade = riskGrade(overallScore)
-  const affectedAudiences = getAffectedAudiences(result)
-  const sortedModules = [...result.modules].sort((a, b) => moduleAverage(b) - moduleAverage(a))
+  const affectedAudiences = getAffectedAudiences(result, metrics)
+  const sortedModules = [...result.modules].sort((a, b) => moduleAverage(b, metrics) - moduleAverage(a, metrics))
   const p0Modules = sortedModules.slice(0, 3)
   const p1Modules = sortedModules.slice(3, 5)
   const pendingModules = sortedModules.slice(5, 8)
@@ -289,7 +312,7 @@ export function PredictionResultPage() {
               <AlertTriangle className="h-8 w-8 text-red-500" />
               <div>
                 <div className="font-semibold text-slate-900">{topRisk?.module.module_title ?? '暂无'}</div>
-                <div className="mt-1 text-sm text-red-600">风险等级：{topRisk ? riskLabel(strongestRisk(topRisk.item)) : '-'}</div>
+                <div className="mt-1 text-sm text-red-600">风险等级：{topRisk ? riskLabel(strongestRisk(topRisk.item, metrics)) : '-'}</div>
               </div>
             </div>
           </div>
@@ -350,7 +373,7 @@ export function PredictionResultPage() {
                       const item = module.audience_results.find((candidate) => candidate.audience_name === audience)
                       return (
                         <td key={`${audience}-${module.module_key}`} className="border-r border-slate-100 px-4 py-4">
-                          {item ? <VoteBar item={item} /> : <div className="h-8 rounded-full bg-slate-100" />}
+                          {item ? <VoteBar item={item} metrics={metrics} /> : <div className="h-8 rounded-full bg-slate-100" />}
                         </td>
                       )
                     })}
@@ -363,10 +386,10 @@ export function PredictionResultPage() {
       </section>
 
       <section>
-        <SectionTitle title={`3. 观察指标分析（已选 ${Math.min(result.modules.length, 5)} 项）`} description="每张卡展示方向假设、影响强度、关联用户、风险原因和行为链路。" />
+        <SectionTitle title={`3. 观察指标分析（已选 ${metrics.length} 项）`} description={`当前观察指标：${metrics.join('、')}`} />
         <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {sortedModules.slice(0, 6).map((module) => (
-            <IndicatorCard key={module.module_key} module={module} />
+            <IndicatorCard key={module.module_key} module={module} metrics={metrics} />
           ))}
         </div>
       </section>
@@ -382,8 +405,8 @@ export function PredictionResultPage() {
               </div>
               <div className="space-y-3">
                 {modules.length ? modules.map((module, index) => {
-                  const item = [...module.audience_results].sort((a, b) => averageScore(b) - averageScore(a))[0]
-                  return <SuggestionCard key={module.module_key} module={module} item={item} index={index} />
+                  const item = [...module.audience_results].sort((a, b) => averageScore(b, metrics) - averageScore(a, metrics))[0]
+                  return <SuggestionCard key={module.module_key} module={module} item={item} index={index} metrics={metrics} />
                 }) : (
                   <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-5 text-sm text-slate-500">暂无对应模块。</div>
                 )}

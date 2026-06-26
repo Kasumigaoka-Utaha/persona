@@ -25,11 +25,13 @@ SYSTEM_PROMPT = """
 必须遵守：
 1. 先写行为判断，再写风险评级。
 2. 风险只允许输出 red / yellow / green，对应 CTR / UV / PV。
-3. 允许输出 metric_scores，表示 0-100 的风险指数；它不是线上真实 CTR/UV/PV 百分比，也不是 baseline。
+3. 允许输出 metric_scores 和 selected_metric_scores，表示 0-100 的风险指数；它不是线上真实百分比，也不是 baseline。
 4. 不允许输出任何优化建议、行动建议或实验建议。
 5. 语言必须具体，使用“可能/倾向于/更容易/较难”等表述。
 6. 所有输出必须是合法 JSON，且字段完整。
 """.strip()
+
+DEFAULT_METRICS = ["CTR", "UV", "PV"]
 
 
 class PredictionService:
@@ -60,6 +62,7 @@ class PredictionService:
                     "document_title": job.document_title,
                     "analyzed_at": datetime.now(timezone.utc),
                     "audiences": [audience["name"] for audience in payload["audiences"]],
+                    "selected_metrics": payload["selected_metrics"],
                     "scope_note": "基于当前文档模块与所选用户群进行方向性判断，不代表真实线上结果。",
                 },
                 modules=module_reports,
@@ -89,6 +92,7 @@ class PredictionService:
     def _build_payload(self, job: AnalysisJob) -> dict[str, Any]:
         modules = self._split_modules(job.document_content)
         audiences = self._load_audiences(job.selected_audience_keys, job.manual_audiences_json)
+        selected_metrics = self._load_selected_metrics(job.run_config)
         return {
             "job": {
                 "id": job.id,
@@ -98,7 +102,17 @@ class PredictionService:
             },
             "modules": modules,
             "audiences": audiences,
+            "selected_metrics": selected_metrics,
         }
+
+    def _load_selected_metrics(self, run_config: dict[str, Any] | None) -> list[str]:
+        values = (run_config or {}).get("selected_metrics") or DEFAULT_METRICS
+        metrics: list[str] = []
+        for value in values:
+            text = str(value).strip()
+            if text and text not in metrics:
+                metrics.append(text[:40])
+        return metrics or DEFAULT_METRICS
 
     def _load_audiences(self, keys: list[str], manual_items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         audiences: list[dict[str, Any]] = []
@@ -191,7 +205,7 @@ class PredictionService:
         for module in payload["modules"]:
             audience_results = []
             for audience in payload["audiences"]:
-                result = await self._analyze_module_audience(payload["job"], module, audience)
+                result = await self._analyze_module_audience(payload["job"], module, audience, payload["selected_metrics"])
                 audience_results.append(result)
             module_reports.append(
                 {
@@ -208,12 +222,14 @@ class PredictionService:
         job_meta: dict[str, Any],
         module: dict[str, str],
         audience: dict[str, Any],
+        selected_metrics: list[str],
     ) -> dict[str, Any]:
         prompt = {
             "document": job_meta,
             "module": module,
             "audience": audience,
-            "goal": "输出该用户群在当前模块上的行为判断、CTR/UV/PV 风险等级和 0-100 风险指数，不要给建议。",
+            "selected_metrics": selected_metrics,
+            "goal": "输出该用户群在当前模块上的行为判断、CTR/UV/PV 兼容风险，以及所选观察指标的风险等级和 0-100 风险指数，不要给建议。",
             "schema": {
                 "audience_key": "string",
                 "audience_name": "string",
@@ -232,12 +248,14 @@ class PredictionService:
                     "uv": "0-100 integer risk index, not real UV percentage",
                     "pv": "0-100 integer risk index, not real PV percentage",
                 },
+                "selected_metric_ratings": "object keyed by selected_metrics, each value red|yellow|green",
+                "selected_metric_scores": "object keyed by selected_metrics, each value 0-100 integer risk index",
                 "risk_reason": "string",
             },
         }
-        fallback = self._fallback_module_audience(module, audience)
+        fallback = self._fallback_module_audience(module, audience, selected_metrics)
         result = await self._generate_json(prompt, fallback)
-        return self._sanitize_result(result, fallback)
+        return self._sanitize_result(result, fallback, selected_metrics)
 
     async def _generate_json(self, prompt: dict[str, Any], fallback: dict[str, Any]) -> dict[str, Any]:
         try:
@@ -271,7 +289,7 @@ class PredictionService:
         content = data["choices"][0]["message"]["content"]
         return json.loads(content)
 
-    def _sanitize_result(self, result: dict[str, Any], fallback: dict[str, Any]) -> dict[str, Any]:
+    def _sanitize_result(self, result: dict[str, Any], fallback: dict[str, Any], selected_metrics: list[str]) -> dict[str, Any]:
         if any(key in result for key in ("recommendations", "experiment_hypotheses", "metric_predictions")):
             return fallback
         risk_ratings = result.get("risk_ratings") or {}
@@ -289,7 +307,31 @@ class PredictionService:
                     return fallback
                 clean_scores[metric] = value
             result["metric_scores"] = clean_scores
-        text_blob = json.dumps({key: value for key, value in result.items() if key != "metric_scores"}, ensure_ascii=False)
+        selected_ratings = result.get("selected_metric_ratings")
+        if not isinstance(selected_ratings, dict):
+            result["selected_metric_ratings"] = fallback["selected_metric_ratings"]
+        else:
+            clean_ratings: dict[str, str] = {}
+            for metric in selected_metrics:
+                value = selected_ratings.get(metric)
+                clean_ratings[metric] = value if value in allowed else fallback["selected_metric_ratings"][metric]
+            result["selected_metric_ratings"] = clean_ratings
+        selected_scores = result.get("selected_metric_scores")
+        if not isinstance(selected_scores, dict):
+            result["selected_metric_scores"] = fallback["selected_metric_scores"]
+        else:
+            clean_selected_scores: dict[str, int] = {}
+            for metric in selected_metrics:
+                value = selected_scores.get(metric)
+                if not isinstance(value, int) or value < 0 or value > 100:
+                    clean_selected_scores[metric] = fallback["selected_metric_scores"][metric]
+                else:
+                    clean_selected_scores[metric] = value
+            result["selected_metric_scores"] = clean_selected_scores
+        text_blob = json.dumps(
+            {key: value for key, value in result.items() if key not in ("metric_scores", "selected_metric_scores")},
+            ensure_ascii=False,
+        )
         if re.search(r"\d+\s*%", text_blob):
             return fallback
         return result
@@ -304,7 +346,21 @@ class PredictionService:
             base += 5
         return max(0, min(100, base))
 
-    def _fallback_module_audience(self, module: dict[str, str], audience: dict[str, Any]) -> dict[str, Any]:
+    def _selected_metric_risk(self, metric: str, audience_name: str, module_text: str, base_risks: dict[str, str]) -> str:
+        text = f"{metric}{module_text}{audience_name}"
+        if any(keyword in text for keyword in ("入口", "点击", "触达")):
+            return base_risks["ctr"]
+        if any(keyword in text for keyword in ("发布", "完成", "配置", "转化")):
+            return base_risks["uv"]
+        if any(keyword in text for keyword in ("二跳", "流失", "留存", "停留")):
+            return base_risks["pv"]
+        if any(keyword in text for keyword in ("信任", "隐私", "评价", "售后")):
+            return "red" if any(keyword in audience_name for keyword in ("信任", "隐私", "售后")) else base_risks["pv"]
+        if any(keyword in text for keyword in ("互动", "评论", "收藏", "分享")):
+            return base_risks["uv"]
+        return max(base_risks.values(), key=lambda value: {"green": 0, "yellow": 1, "red": 2}[value])
+
+    def _fallback_module_audience(self, module: dict[str, str], audience: dict[str, Any], selected_metrics: list[str]) -> dict[str, Any]:
         text = module["module_text"]
         low_patience = "耐心" in audience["name"] or "快速" in audience["name"]
         high_trust = "信任" in audience["name"]
@@ -335,6 +391,15 @@ class PredictionService:
             pv = "green" if report_focus and not low_patience else pv
             will_do = f"{audience['name']} 更容易沿着模块化结构继续看下去，尤其会关注与自己相关的对比信息。"
             reason = "模块结构较清晰时，用户更容易理解分析范围并继续浏览更多内容。"
+        risk_ratings = {"ctr": ctr, "uv": uv, "pv": pv}
+        selected_metric_ratings = {
+            metric: self._selected_metric_risk(metric, audience["name"], text, risk_ratings)
+            for metric in selected_metrics
+        }
+        selected_metric_scores = {
+            metric: self._score_from_risk(risk, audience["name"], text)
+            for metric, risk in selected_metric_ratings.items()
+        }
         return {
             "audience_key": audience["key"],
             "audience_name": audience["name"],
@@ -343,12 +408,14 @@ class PredictionService:
                 "get_stuck_at": stuck,
                 "wont_do": wont,
             },
-            "risk_ratings": {"ctr": ctr, "uv": uv, "pv": pv},
+            "risk_ratings": risk_ratings,
             "metric_scores": {
                 "ctr": self._score_from_risk(ctr, audience["name"], text),
                 "uv": self._score_from_risk(uv, audience["name"], text),
                 "pv": self._score_from_risk(pv, audience["name"], text),
             },
+            "selected_metric_ratings": selected_metric_ratings,
+            "selected_metric_scores": selected_metric_scores,
             "risk_reason": reason,
         }
 

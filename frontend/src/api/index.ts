@@ -5,12 +5,20 @@ import type {
   DemoDocument,
   DocumentInput,
   ManualAudienceInput,
+  ParsedDocument,
 } from '../types/api'
 
 export const api = {
   getDemoDocument: () => request<DemoDocument>('/demo/document'),
+  parseDocumentLink: (url: string) =>
+    request<ParsedDocument>('/documents/parse-link', { method: 'POST', body: JSON.stringify({ url }) }),
+  parseDocumentFile: (file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return request<ParsedDocument>('/documents/parse-file', { method: 'POST', body: formData })
+  },
   listAudiences: () => request<AudienceDefinition[]>('/audiences'),
-  runAnalysis: (payload: { document: DocumentInput; selected_audience_keys: string[]; manual_audiences: ManualAudienceInput[] }) =>
+  runAnalysis: (payload: { document: DocumentInput; selected_audience_keys: string[]; manual_audiences: ManualAudienceInput[]; selected_metrics: string[] }) =>
     request<AnalysisJob>('/analysis/run', { method: 'POST', body: JSON.stringify(payload) }),
   getAnalysis: (jobId: number) => request<AnalysisJob>(`/analysis/${jobId}`),
   exportMarkdown: (jobId: number) => request<{ markdown: string }>(`/reports/${jobId}/markdown`),

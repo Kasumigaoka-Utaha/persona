@@ -28,6 +28,11 @@ import type { AudienceDefinition, ManualAudienceInput } from '../types/api'
 import { cn } from '../lib/utils'
 import { FALLBACK_AUDIENCES, FALLBACK_DEMO_DOCUMENT } from '../data/fallbacks'
 
+type DocumentSource = {
+  host: string
+  sourceMode: string
+}
+
 type CustomAudience = ManualAudienceInput & {
   key: string
   chips: string[]
@@ -118,6 +123,9 @@ export function TaskWizardPage() {
   const [detail, setDetail] = useState<AudienceDetail | null>(null)
   const [documentTitle, setDocumentTitle] = useState<string | null>(null)
   const [documentContent, setDocumentContent] = useState<string | null>(null)
+  const [documentSource, setDocumentSource] = useState<DocumentSource | null>(null)
+  const [prdLink, setPrdLink] = useState('')
+  const [documentNotice, setDocumentNotice] = useState('')
 
   const documentQuery = useQuery({ queryKey: ['demo-document'], queryFn: api.getDemoDocument })
   const audiencesQuery = useQuery({ queryKey: ['audiences'], queryFn: api.listAudiences })
@@ -134,6 +142,10 @@ export function TaskWizardPage() {
   const loadedDocument = documentQuery.data ?? (documentQuery.isError ? FALLBACK_DEMO_DOCUMENT : null)
   const effectiveDocumentTitle = documentTitle ?? loadedDocument?.title ?? ''
   const effectiveDocumentContent = documentContent ?? loadedDocument?.content ?? ''
+  const effectiveDocumentSource = documentSource ?? {
+    host: loadedDocument?.host ?? FALLBACK_DEMO_DOCUMENT.host,
+    sourceMode: 'host',
+  }
 
   const selectedFallbackAudiences = useMemo(
     () => audienceSource.filter((item) => item.source === 'frontend_fallback' && selectedAudienceKeys.includes(item.key)),
@@ -151,14 +163,16 @@ export function TaskWizardPage() {
   )
 
   const totalAudienceCount = selectedAudienceKeys.length + selectedCustomKeys.length
-  const canRun = effectiveDocumentTitle.trim().length > 0 && effectiveDocumentContent.trim().length >= 20 && totalAudienceCount >= 1 && totalAudienceCount <= 5
+  const canRun = effectiveDocumentTitle.trim().length > 0 && effectiveDocumentContent.trim().length >= 20 && totalAudienceCount >= 1 && totalAudienceCount <= 5 && selectedMetrics.length >= 1
   const disabledReason = !effectiveDocumentTitle.trim() || effectiveDocumentContent.trim().length < 20
     ? '文档未加载完成'
     : totalAudienceCount < 1
       ? '请先选择至少 1 个陪审团标签'
       : totalAudienceCount > 5
         ? '最多选择 5 个用户群'
-        : ''
+        : selectedMetrics.length < 1
+          ? '请至少选择 1 个观察指标'
+          : ''
 
   const runAnalysisMutation = useMutation({
     mutationFn: async () => {
@@ -183,11 +197,12 @@ export function TaskWizardPage() {
         document: {
           title: effectiveDocumentTitle.trim(),
           content: effectiveDocumentContent.trim(),
-          host: documentQuery.data?.host ?? FALLBACK_DEMO_DOCUMENT.host,
-          source_mode: 'host',
+          host: effectiveDocumentSource.host,
+          source_mode: effectiveDocumentSource.sourceMode,
         },
         selected_audience_keys: selectedBackendKeys,
         manual_audiences: [...fallbackManualAudiences, ...manualAudiences],
+        selected_metrics: selectedMetrics,
       })
     },
     onSuccess: async (job) => {
@@ -225,6 +240,51 @@ export function TaskWizardPage() {
 
   const toggleMetric = (metric: string) => {
     setSelectedMetrics((current) => current.includes(metric) ? current.filter((item) => item !== metric) : [...current, metric])
+  }
+
+  const applyParsedDocument = (title: string, content: string, host: string, sourceMode: string, notice: string) => {
+    setDocumentTitle(title)
+    setDocumentContent(content)
+    setDocumentSource({ host, sourceMode })
+    setDocumentNotice(notice)
+  }
+
+  const parseLinkMutation = useMutation({
+    mutationFn: api.parseDocumentLink,
+    onSuccess: (parsed) => {
+      if (parsed.needs_manual_content || !parsed.content.trim()) {
+        setDocumentNotice('链接无法自动读取正文，请改用上传本地文档或手动粘贴 PRD 内容。')
+        return
+      }
+      applyParsedDocument(parsed.title, parsed.content, parsed.host, parsed.source_mode, '链接解析成功，已填入当前文档上下文。')
+    },
+    onError: (error) => {
+      setDocumentNotice(error instanceof Error ? error.message : '链接解析失败，请改用上传或手动粘贴正文。')
+    },
+  })
+
+  const parseFileMutation = useMutation({
+    mutationFn: api.parseDocumentFile,
+    onSuccess: (parsed) => {
+      applyParsedDocument(parsed.title, parsed.content, parsed.host, parsed.source_mode, '本地文档解析成功，已填入当前文档上下文。')
+    },
+    onError: (error) => {
+      setDocumentNotice(error instanceof Error ? error.message : '文件解析失败，请确认格式后重试。')
+    },
+  })
+
+  const parseCurrentLink = () => {
+    const url = prdLink.trim()
+    if (!url) {
+      setDocumentNotice('请先输入 PRD 链接。')
+      return
+    }
+    parseLinkMutation.mutate(url)
+  }
+
+  const uploadFile = (file: File | undefined) => {
+    if (!file) return
+    parseFileMutation.mutate(file)
   }
 
   const completeCustomAudience = async () => {
@@ -327,22 +387,55 @@ export function TaskWizardPage() {
                     <div className="mt-1 text-sm text-slate-500">解析 PRD，智能提取关键信息</div>
                   </div>
                 </div>
-                <Input className="mt-4 bg-white" placeholder="输入飞书文档链接" />
+                <div className="mt-4 flex gap-2">
+                  <Input
+                    className="bg-white"
+                    value={prdLink}
+                    onChange={(event) => setPrdLink(event.target.value)}
+                    placeholder="输入公开可访问的 PRD 链接"
+                  />
+                  <Button
+                    className="shrink-0 bg-blue-600 hover:bg-blue-700"
+                    disabled={parseLinkMutation.isPending}
+                    onClick={parseCurrentLink}
+                  >
+                    {parseLinkMutation.isPending ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    解析
+                  </Button>
+                </div>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-5">
+              <div
+                className="rounded-2xl border border-slate-200 bg-white p-5"
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={(event) => {
+                  event.preventDefault()
+                  uploadFile(event.dataTransfer.files[0])
+                }}
+              >
                 <div className="flex items-center gap-3">
                   <FileText className="h-5 w-5 text-blue-600" />
                   <div>
                     <div className="font-semibold text-slate-900">上传本地文档</div>
-                    <div className="mt-1 text-sm text-slate-500">支持 PDF / DOC / TXT 等格式</div>
+                    <div className="mt-1 text-sm text-slate-500">支持 PDF / DOCX / TXT / MD 格式</div>
                   </div>
                 </div>
-                <button type="button" className="mt-4 flex w-full items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">
+                <label className="mt-4 flex w-full cursor-pointer items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">
                   <Upload className="h-4 w-4" />
-                  点击或拖拽文件上传
-                </button>
+                  {parseFileMutation.isPending ? '正在解析...' : '点击或拖拽文件上传'}
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept=".pdf,.docx,.txt,.md"
+                    onChange={(event) => uploadFile(event.target.files?.[0])}
+                  />
+                </label>
               </div>
             </div>
+            {documentNotice ? (
+              <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-700">
+                {documentNotice}
+              </div>
+            ) : null}
           </Card>
 
           <Card className="p-5">
@@ -429,21 +522,58 @@ export function TaskWizardPage() {
               <Search className="h-4 w-4 text-slate-400" />
               <input className="min-w-0 flex-1 border-0 bg-transparent text-sm outline-none placeholder:text-slate-400" placeholder="搜索观察指标，例如：入口点击率" />
             </div>
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+              <div className="text-sm font-medium text-slate-900">当前已选观察指标</div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {selectedMetrics.map((metric) => (
+                  <button
+                    key={metric}
+                    type="button"
+                    onClick={() => toggleMetric(metric)}
+                    className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-200"
+                  >
+                    {metric}
+                    <X className="h-3 w-3" />
+                  </button>
+                ))}
+                {!selectedMetrics.length ? <span className="text-sm text-slate-500">请选择至少 1 个观察指标，默认建议 3-5 个。</span> : null}
+              </div>
+            </div>
             <div className="mt-4 grid gap-4 rounded-2xl border border-slate-100 bg-white p-4 md:grid-cols-2">
               <div>
                 <div className="text-xs font-medium text-slate-500">热门搜索</div>
                 <div className="mt-2 space-y-2 text-sm text-slate-600">
-                  {METRICS.slice(0, 5).map((metric) => (
-                    <button key={metric} type="button" onClick={() => toggleMetric(metric)} className="block hover:text-blue-600">◆ {metric}</button>
-                  ))}
+                  {METRICS.slice(0, 5).map((metric) => {
+                    const active = selectedMetrics.includes(metric)
+                    return (
+                      <button
+                        key={metric}
+                        type="button"
+                        onClick={() => toggleMetric(metric)}
+                        className={cn('block rounded-lg px-2 py-1 text-left hover:text-blue-600', active && 'bg-blue-50 font-medium text-blue-700')}
+                      >
+                        {active ? '✓' : '◆'} {metric}
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
               <div>
                 <div className="text-xs font-medium text-slate-500">最近使用</div>
                 <div className="mt-2 space-y-2 text-sm text-slate-600">
-                  {METRICS.slice(1, 5).map((metric) => (
-                    <button key={metric} type="button" onClick={() => toggleMetric(metric)} className="block hover:text-blue-600">◆ {metric}</button>
-                  ))}
+                  {METRICS.slice(1, 5).map((metric) => {
+                    const active = selectedMetrics.includes(metric)
+                    return (
+                      <button
+                        key={metric}
+                        type="button"
+                        onClick={() => toggleMetric(metric)}
+                        className={cn('block rounded-lg px-2 py-1 text-left hover:text-blue-600', active && 'bg-blue-50 font-medium text-blue-700')}
+                      >
+                        {active ? '✓' : '◆'} {metric}
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
             </div>

@@ -13,6 +13,7 @@ def test_build_comparison_table_marks_high_divergence_for_two_grade_gap() -> Non
                     "audience_name": "A",
                     "behavior": {"will_do": "会主动点击", "get_stuck_at": "较少", "wont_do": "不会离开"},
                     "risk_ratings": {"ctr": "green", "uv": "yellow", "pv": "yellow"},
+                    "selected_metric_ratings": {"入口点击率": "green", "信任感": "yellow"},
                     "risk_reason": "reason",
                 },
                 {
@@ -20,6 +21,7 @@ def test_build_comparison_table_marks_high_divergence_for_two_grade_gap() -> Non
                     "audience_name": "B",
                     "behavior": {"will_do": "会快速扫过", "get_stuck_at": "入口语义", "wont_do": "不会继续"},
                     "risk_ratings": {"ctr": "red", "uv": "yellow", "pv": "yellow"},
+                    "selected_metric_ratings": {"入口点击率": "red", "信任感": "yellow"},
                     "risk_reason": "reason",
                 },
             ],
@@ -42,6 +44,7 @@ def test_summarize_conclusion_collects_high_risk_and_covered_audiences() -> None
                     "audience_name": "高信任需求用户",
                     "behavior": {"will_do": "会验证", "get_stuck_at": "证据不足", "wont_do": "不会直接接受"},
                     "risk_ratings": {"ctr": "yellow", "uv": "red", "pv": "red"},
+                    "selected_metric_ratings": {"信任感": "red"},
                     "risk_reason": "reason",
                 }
             ],

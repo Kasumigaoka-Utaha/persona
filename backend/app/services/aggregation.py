@@ -14,6 +14,13 @@ def overall_risk(ratings: dict[str, str]) -> str:
     return max(ratings.values(), key=lambda value: RISK_SCORE[value])
 
 
+def result_ratings(result: dict[str, Any]) -> dict[str, str]:
+    selected = result.get("selected_metric_ratings")
+    if isinstance(selected, dict) and selected:
+        return selected
+    return result["risk_ratings"]
+
+
 def has_behavior_conflict(audience_results: list[dict[str, Any]]) -> bool:
     positives = 0
     negatives = 0
@@ -29,15 +36,16 @@ def has_behavior_conflict(audience_results: list[dict[str, Any]]) -> bool:
 
 def divergence_for_module(module: dict[str, Any]) -> tuple[str | None, str | None]:
     audience_results = module["audience_results"]
-    for metric in ("ctr", "uv", "pv"):
-        scores = [RISK_SCORE[result["risk_ratings"][metric]] for result in audience_results]
+    metric_names = sorted({metric for result in audience_results for metric in result_ratings(result)})
+    for metric in metric_names:
+        scores = [RISK_SCORE[result_ratings(result)[metric]] for result in audience_results if metric in result_ratings(result)]
         if scores and max(scores) - min(scores) >= 2:
-            return "high", f"{metric.upper()} 风险等级在不同用户群之间跨度达到 2 档。"
+            return "high", f"{metric} 风险等级在不同用户群之间跨度达到 2 档。"
     if has_behavior_conflict(audience_results):
         return "high", "不同用户群对该模块的行为判断出现明显相反倾向。"
     spreads = []
-    for metric in ("ctr", "uv", "pv"):
-        scores = [RISK_SCORE[result["risk_ratings"][metric]] for result in audience_results]
+    for metric in metric_names:
+        scores = [RISK_SCORE[result_ratings(result)[metric]] for result in audience_results if metric in result_ratings(result)]
         if scores:
             spreads.append(max(scores) - min(scores))
     if spreads and max(spreads) >= 1:
@@ -58,7 +66,7 @@ def build_comparison_table(modules: list[dict[str, Any]]) -> tuple[list[dict[str
                     {
                         "audience_key": result["audience_key"],
                         "audience_name": result["audience_name"],
-                        "overall_risk": overall_risk(result["risk_ratings"]),
+                        "overall_risk": overall_risk(result_ratings(result)),
                     }
                     for result in module["audience_results"]
                 ],
@@ -85,7 +93,7 @@ def summarize_conclusion(modules: list[dict[str, Any]], divergence_items: list[d
         risky = False
         for result in module["audience_results"]:
             audience_names[result["audience_name"]] += 1
-            if overall_risk(result["risk_ratings"]) == "red":
+            if overall_risk(result_ratings(result)) == "red":
                 risky = True
         if risky:
             high_risk_modules.append(module["module_title"])

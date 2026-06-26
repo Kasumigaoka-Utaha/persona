@@ -11,6 +11,7 @@ def test_render_markdown_report() -> None:
                     "document_title": "用户实时陪审团_PRD_副本",
                     "analyzed_at": "2026-06-21T12:00:00Z",
                     "audiences": ["新客低耐心用户", "高信任需求用户"],
+                    "selected_metrics": ["入口点击率", "信任感"],
                     "scope_note": "基于当前文档模块与所选用户群进行方向性判断。",
                 },
                 "modules": [
@@ -27,6 +28,8 @@ def test_render_markdown_report() -> None:
                                 },
                                 "risk_ratings": {"ctr": "red", "uv": "yellow", "pv": "yellow"},
                                 "metric_scores": {"ctr": 88, "uv": 55, "pv": 52},
+                                "selected_metric_ratings": {"入口点击率": "red", "信任感": "yellow"},
+                                "selected_metric_scores": {"入口点击率": 88, "信任感": 61},
                                 "risk_reason": "认知成本偏高",
                             }
                         ],
@@ -55,5 +58,6 @@ def test_render_markdown_report() -> None:
     assert "AI 陪审团判断" in markdown
     assert "入口设计" in markdown
     assert "🔴" in markdown
-    assert "CTR 88" in markdown
+    assert "入口点击率 88" in markdown
+    assert "观察指标：入口点击率、信任感" in markdown
     assert "高分歧" in markdown

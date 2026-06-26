@@ -37,6 +37,15 @@ export type DemoDocument = {
   host: string
 }
 
+export type ParsedDocument = {
+  title: string
+  content: string
+  host: string
+  source_mode: string
+  parse_status: string
+  needs_manual_content: boolean
+}
+
 export type BehaviorPrediction = {
   will_do: string
   get_stuck_at: string
@@ -55,12 +64,17 @@ export type MetricScores = {
   pv: number
 }
 
+export type SelectedMetricRatings = Record<string, 'red' | 'yellow' | 'green'>
+export type SelectedMetricScores = Record<string, number>
+
 export type AudienceModuleResult = {
   audience_key: string
   audience_name: string
   behavior: BehaviorPrediction
   risk_ratings: RiskRatings
   metric_scores: MetricScores
+  selected_metric_ratings?: SelectedMetricRatings
+  selected_metric_scores?: SelectedMetricScores
   risk_reason: string
 }
 
@@ -102,6 +116,7 @@ export type ReportMeta = {
   analyzed_at: string
   audiences: string[]
   scope_note: string
+  selected_metrics?: string[]
 }
 
 export type JuryReportPayload = {

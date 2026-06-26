@@ -51,10 +51,24 @@ class DemoDocumentResponse(BaseModel):
     host: str
 
 
+class ParsedDocumentResponse(BaseModel):
+    title: str
+    content: str
+    host: str
+    source_mode: str
+    parse_status: str
+    needs_manual_content: bool
+
+
+class LinkParseRequest(BaseModel):
+    url: str = Field(min_length=1, max_length=2048)
+
+
 class AnalysisRunRequest(BaseModel):
     document: DocumentInput
     selected_audience_keys: list[str] = Field(default_factory=list)
     manual_audiences: list[ManualAudienceInput] = Field(default_factory=list)
+    selected_metrics: list[str] = Field(default_factory=list)
 
 
 class BehaviorPrediction(BaseModel):
@@ -81,6 +95,8 @@ class AudienceModuleResult(BaseModel):
     behavior: BehaviorPrediction
     risk_ratings: RiskRatings
     metric_scores: MetricScores = Field(default_factory=lambda: MetricScores(ctr=0, uv=0, pv=0))
+    selected_metric_ratings: dict[str, RiskGrade] = Field(default_factory=dict)
+    selected_metric_scores: dict[str, int] = Field(default_factory=dict)
     risk_reason: str
 
 
@@ -122,6 +138,7 @@ class ReportMeta(BaseModel):
     analyzed_at: datetime
     audiences: list[str]
     scope_note: str
+    selected_metrics: list[str] = Field(default_factory=list)
 
 
 class JuryReportPayload(BaseModel):
