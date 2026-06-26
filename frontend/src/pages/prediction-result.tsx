@@ -1,43 +1,158 @@
 import { useEffect } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { useParams } from 'react-router-dom'
-import { Download, LoaderCircle } from 'lucide-react'
+import { Link, useParams } from 'react-router-dom'
+import {
+  AlertTriangle,
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle2,
+  Clipboard,
+  Download,
+  FileText,
+  FlaskConical,
+  LoaderCircle,
+  RotateCcw,
+  ShieldCheck,
+  Sparkles,
+  Users,
+} from 'lucide-react'
 import { api } from '../api'
-import { Badge, Button, Card, SectionTitle } from '../components/ui'
-import { divergenceLabel, riskEmoji, riskLabel } from '../lib/utils'
-import type { AudienceModuleResult } from '../types/api'
+import { Badge, Button, Card, GhostButton, SectionTitle } from '../components/ui'
+import type { AudienceModuleResult, JuryReportPayload, ModuleReport } from '../types/api'
+import { cn, riskLabel } from '../lib/utils'
 
-function scoreTone(value: number) {
-  if (value >= 75) return 'bg-red-500'
-  if (value >= 45) return 'bg-amber-400'
-  return 'bg-emerald-500'
+type RiskValue = 'red' | 'yellow' | 'green'
+
+const voteMeta: Record<RiskValue, { label: string; color: string; bg: string; text: string }> = {
+  green: { label: '支持', color: 'bg-emerald-500', bg: 'bg-emerald-50', text: 'text-emerald-700' },
+  yellow: { label: '犹豫', color: 'bg-amber-400', bg: 'bg-amber-50', text: 'text-amber-700' },
+  red: { label: '反对', color: 'bg-red-500', bg: 'bg-red-50', text: 'text-red-700' },
 }
 
-function MetricBars({ item }: { item: AudienceModuleResult }) {
-  const metrics = [
-    { key: 'ctr', label: 'CTR', value: item.metric_scores?.ctr ?? 0 },
-    { key: 'uv', label: 'UV', value: item.metric_scores?.uv ?? 0 },
-    { key: 'pv', label: 'PV', value: item.metric_scores?.pv ?? 0 },
-  ]
-  return (
-    <div className="space-y-2">
-      {metrics.map((metric) => (
-        <div key={metric.key} className="grid grid-cols-[40px_1fr_42px] items-center gap-2 text-xs">
-          <span className="font-medium text-slate-500">{metric.label}</span>
-          <div className="h-2.5 overflow-hidden rounded-full bg-slate-200">
-            <div className={scoreTone(metric.value)} style={{ width: `${metric.value}%`, height: '100%' }} />
-          </div>
-          <span className="text-right font-semibold text-slate-700">{metric.value}</span>
-        </div>
-      ))}
-    </div>
-  )
-}
+const priorityMeta = [
+  { title: 'P0 本轮必须改', className: 'border-red-100 bg-red-50/70 text-red-700', badge: 'bg-red-500 text-white' },
+  { title: 'P1 建议优化', className: 'border-amber-100 bg-amber-50/70 text-amber-700', badge: 'bg-amber-400 text-amber-950' },
+  { title: '待验证项', className: 'border-slate-200 bg-slate-50 text-slate-700', badge: 'bg-slate-400 text-white' },
+]
 
 function averageScore(item: AudienceModuleResult) {
   const scores = item.metric_scores
   if (!scores) return 0
   return Math.round((scores.ctr + scores.uv + scores.pv) / 3)
+}
+
+function moduleAverage(module: ModuleReport) {
+  if (!module.audience_results.length) return 0
+  return Math.round(module.audience_results.reduce((sum, item) => sum + averageScore(item), 0) / module.audience_results.length)
+}
+
+function strongestRisk(item: AudienceModuleResult): RiskValue {
+  const entries = Object.entries(item.metric_scores ?? { ctr: 0, uv: 0, pv: 0 }) as Array<[keyof AudienceModuleResult['metric_scores'], number]>
+  const key = entries.sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'ctr'
+  return item.risk_ratings[key]
+}
+
+function riskGrade(score: number) {
+  if (score >= 75) return { label: '高', badge: 'bg-red-100 text-red-700', bar: 'bg-red-500' }
+  if (score >= 55) return { label: '中高', badge: 'bg-amber-100 text-amber-700', bar: 'bg-amber-400' }
+  if (score >= 35) return { label: '中', badge: 'bg-blue-100 text-blue-700', bar: 'bg-blue-500' }
+  return { label: '低', badge: 'bg-emerald-100 text-emerald-700', bar: 'bg-emerald-500' }
+}
+
+function metricDirection(value: number) {
+  if (value >= 70) return { symbol: '↓', label: '降低', className: 'text-red-600' }
+  if (value >= 45) return { symbol: '→', label: '承压', className: 'text-slate-500' }
+  return { symbol: '↑', label: '提升', className: 'text-emerald-600' }
+}
+
+function getTopRisk(result: JuryReportPayload) {
+  return result.modules
+    .flatMap((module) => module.audience_results.map((item) => ({
+      module,
+      item,
+      score: averageScore(item),
+    })))
+    .sort((a, b) => b.score - a.score)[0]
+}
+
+function getAffectedAudiences(result: JuryReportPayload) {
+  return result.report_meta.audiences
+    .map((audience) => {
+      const scores = result.modules.flatMap((module) => module.audience_results.filter((item) => item.audience_name === audience).map(averageScore))
+      const score = scores.length ? Math.round(scores.reduce((sum, value) => sum + value, 0) / scores.length) : 0
+      return { audience, score }
+    })
+    .sort((a, b) => b.score - a.score)
+}
+
+function VoteBar({ item }: { item: AudienceModuleResult }) {
+  const risk = strongestRisk(item)
+  const supportWidth = Math.max(8, 100 - averageScore(item))
+  const riskWidth = 100 - supportWidth
+  return (
+    <div className="flex h-8 overflow-hidden rounded-full bg-slate-100 text-xs font-semibold text-white">
+      <div className={cn('flex items-center justify-center', voteMeta.green.color)} style={{ width: `${supportWidth}%` }}>
+        {supportWidth > 24 ? '支持' : ''}
+      </div>
+      <div className={cn('flex items-center justify-center', voteMeta[risk].color)} style={{ width: `${riskWidth}%` }}>
+        {riskWidth > 18 ? voteMeta[risk].label : ''}
+      </div>
+    </div>
+  )
+}
+
+function IndicatorCard({ module }: { module: ModuleReport }) {
+  const topItem = [...module.audience_results].sort((a, b) => averageScore(b) - averageScore(a))[0]
+  const score = moduleAverage(module)
+  const grade = riskGrade(score)
+  const ctrDirection = metricDirection(topItem?.metric_scores.ctr ?? score)
+  const uvDirection = metricDirection(topItem?.metric_scores.uv ?? score)
+  const pvDirection = metricDirection(topItem?.metric_scores.pv ?? score)
+
+  return (
+    <Card className="p-4 shadow-none">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+            <FileText className="h-5 w-5" />
+          </span>
+          <div>
+            <div className="font-semibold text-slate-900">{module.module_title}</div>
+            <div className={cn('mt-1 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold', grade.badge)}>风险 {grade.label}</div>
+          </div>
+        </div>
+      </div>
+      <div className="mt-4 space-y-2 text-sm leading-6 text-slate-600">
+        <div><span className="font-medium text-slate-900">方向假设</span> <span className={ctrDirection.className}>{ctrDirection.symbol}</span> {ctrDirection.label}</div>
+        <div><span className="font-medium text-slate-900">影响强度</span> <span className={grade.label === '高' ? 'text-red-600' : 'text-amber-600'}>{grade.label}</span></div>
+        <div><span className="font-medium text-slate-900">置信度</span> 中</div>
+        <div><span className="font-medium text-slate-900">关联用户</span> {topItem?.audience_name ?? '暂无'}</div>
+        <div><span className="font-medium text-slate-900">风险原因</span> {topItem?.risk_reason ?? module.module_summary}</div>
+        <div><span className="font-medium text-slate-900">行为链路</span> {topItem ? `${topItem.behavior.will_do} → ${topItem.behavior.get_stuck_at}` : module.module_summary}</div>
+      </div>
+      <div className="mt-4 grid grid-cols-3 gap-2 rounded-2xl bg-slate-50 p-3 text-center text-xs">
+        <div className={ctrDirection.className}>CTR {ctrDirection.symbol}</div>
+        <div className={uvDirection.className}>UV {uvDirection.symbol}</div>
+        <div className={pvDirection.className}>PV {pvDirection.symbol}</div>
+      </div>
+    </Card>
+  )
+}
+
+function SuggestionCard({ module, item, index }: { module: ModuleReport; item?: AudienceModuleResult; index: number }) {
+  const score = item ? averageScore(item) : moduleAverage(module)
+  const grade = riskGrade(score)
+  return (
+    <div className="rounded-2xl border border-white/70 bg-white p-4 shadow-sm">
+      <div className="font-semibold text-slate-900">{index + 1}. {module.module_title}</div>
+      <div className="mt-3 grid gap-2 text-sm leading-6 text-slate-600">
+        <div><span className="font-medium text-slate-900">为什么改</span> {item?.risk_reason ?? module.module_summary}</div>
+        <div><span className="font-medium text-slate-900">怎么改</span> 降低理解门槛，强化入口说明、状态反馈和可信信息露出。</div>
+        <div><span className="font-medium text-slate-900">影响指标</span> CTR / UV / PV</div>
+        <div><span className="font-medium text-slate-900">验证成本</span> {grade.label === '高' ? '低（A/B 测试 1-2 天）' : '中（设计 + 开发 2-3 天）'}</div>
+      </div>
+    </div>
+  )
 }
 
 export function PredictionResultPage() {
@@ -82,56 +197,18 @@ export function PredictionResultPage() {
 
   const job = query.data
   const result = job.result
-  const topRiskItem = result
-    ? result.modules.flatMap((module) => module.audience_results.map((item) => ({
-        moduleTitle: module.module_title,
-        audienceName: item.audience_name,
-        score: averageScore(item),
-      }))).sort((a, b) => b.score - a.score)[0]
-    : null
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-semibold text-slate-900">陪审团分析报告</h1>
-          <p className="mt-2 text-sm text-slate-500">行为判断在前，风险评级在后；风险指数为 0-100 方向性估算，不代表真实线上百分比。</p>
-        </div>
-        <div className="flex gap-3">
-          <Badge className="bg-slate-900 text-white">{job.status}</Badge>
-          <Button onClick={() => exportMutation.mutate()} disabled={job.status !== 'succeeded' || exportMutation.isPending}>
-            <Download className="mr-2 h-4 w-4" />导出 Markdown
-          </Button>
-        </div>
-      </div>
-
-      <Card className="p-6">
-        <div className="grid gap-4 md:grid-cols-4">
-          <div>
-            <div className="text-xs uppercase tracking-wide text-slate-400">Document</div>
-            <div className="mt-1 font-medium text-slate-900">{job.document_title}</div>
-          </div>
-          <div>
-            <div className="text-xs uppercase tracking-wide text-slate-400">Host</div>
-            <div className="mt-1 font-medium text-slate-900">{job.host}</div>
-          </div>
-          <div>
-            <div className="text-xs uppercase tracking-wide text-slate-400">Stage</div>
-            <div className="mt-1 font-medium text-slate-900">{job.stage}</div>
-          </div>
-          <div>
-            <div className="text-xs uppercase tracking-wide text-slate-400">Started</div>
-            <div className="mt-1 font-medium text-slate-900">{job.started_at ? new Date(job.started_at).toLocaleString() : '--'}</div>
-          </div>
-        </div>
-      </Card>
-
-      {job.status !== 'succeeded' ? (
+  if (job.status !== 'succeeded' || !result) {
+    return (
+      <div className="mx-auto max-w-3xl">
         <Card className="p-10 text-center">
           {job.status === 'failed' ? (
             <div className="space-y-3">
               <div className="text-lg font-semibold text-red-600">生成失败</div>
               <div className="text-sm text-slate-500">{job.error_message}</div>
+              <Link to="/">
+                <GhostButton className="mt-4">返回配置</GhostButton>
+              </Link>
             </div>
           ) : (
             <div className="space-y-3">
@@ -141,150 +218,202 @@ export function PredictionResultPage() {
             </div>
           )}
         </Card>
-      ) : result ? (
-        <>
-          <Card className="p-6">
-            <SectionTitle title="一、分析说明" description="当前文档、分析范围与覆盖用户群。" />
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-700">
-                <div className="font-medium text-slate-900">文档标题</div>
-                <div className="mt-2">{result.report_meta.document_title}</div>
-              </div>
-              <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-700">
-                <div className="font-medium text-slate-900">分析时间</div>
-                <div className="mt-2">{new Date(result.report_meta.analyzed_at).toLocaleString()}</div>
-              </div>
-              <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-700 md:col-span-2">
-                <div className="font-medium text-slate-900">所选用户群</div>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {result.report_meta.audiences.map((audience) => <Badge key={audience}>{audience}</Badge>)}
-                </div>
-              </div>
-              <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-700 md:col-span-2">
-                <div className="font-medium text-slate-900">分析范围说明</div>
-                <div className="mt-2">{result.report_meta.scope_note}</div>
+      </div>
+    )
+  }
+
+  const topRisk = getTopRisk(result)
+  const overallScore = Math.round(result.modules.reduce((sum, module) => sum + moduleAverage(module), 0) / Math.max(result.modules.length, 1))
+  const overallGrade = riskGrade(overallScore)
+  const affectedAudiences = getAffectedAudiences(result)
+  const sortedModules = [...result.modules].sort((a, b) => moduleAverage(b) - moduleAverage(a))
+  const p0Modules = sortedModules.slice(0, 3)
+  const p1Modules = sortedModules.slice(3, 5)
+  const pendingModules = sortedModules.slice(5, 8)
+  const suggestionGroups = [p0Modules, p1Modules, pendingModules]
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">
+        <div className="flex items-center gap-3">
+          <Link to="/">
+            <GhostButton className="px-3">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              返回配置
+            </GhostButton>
+          </Link>
+          <h1 className="text-2xl font-semibold text-slate-900">用户实时陪审团｜完整分析报告</h1>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <GhostButton>
+            <RotateCcw className="mr-2 h-4 w-4" />
+            重新选择陪审团 / 指标
+          </GhostButton>
+          <Button className="bg-blue-600 hover:bg-blue-700">
+            <Sparkles className="mr-2 h-4 w-4" />
+            生成修改建议
+          </Button>
+          <GhostButton onClick={() => exportMutation.mutate()} disabled={exportMutation.isPending}>
+            <Download className="mr-2 h-4 w-4" />
+            复制摘要
+          </GhostButton>
+        </div>
+      </div>
+
+      <Card className="overflow-hidden p-0">
+        <div className="grid divide-y divide-slate-200 lg:grid-cols-[1.2fr_0.8fr_0.8fr_0.8fr_0.8fr] lg:divide-x lg:divide-y-0">
+          <div className="flex gap-4 p-6">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+              <CheckCircle2 className="h-7 w-7" />
+            </span>
+            <div>
+              <div className="text-sm font-semibold text-slate-500">一句话结论</div>
+              <div className="mt-2 text-xl font-semibold leading-8 text-slate-900">
+                {topRisk ? `${topRisk.module.module_title} 对 ${topRisk.item.audience_name} 风险最高。` : '整体风险可控。'}
               </div>
             </div>
-          </Card>
+          </div>
+          <div className="p-6">
+            <div className="text-sm font-semibold text-slate-500">总风险等级</div>
+            <div className="mt-3 flex items-center gap-3">
+              <ShieldCheck className="h-8 w-8 text-amber-500" />
+              <span className="text-3xl font-bold text-amber-600">{overallGrade.label}</span>
+            </div>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200">
+              <div className={overallGrade.bar} style={{ width: `${overallScore}%`, height: '100%' }} />
+            </div>
+          </div>
+          <div className="p-6">
+            <div className="text-sm font-semibold text-slate-500">最高风险模块</div>
+            <div className="mt-3 flex items-center gap-3">
+              <AlertTriangle className="h-8 w-8 text-red-500" />
+              <div>
+                <div className="font-semibold text-slate-900">{topRisk?.module.module_title ?? '暂无'}</div>
+                <div className="mt-1 text-sm text-red-600">风险等级：{topRisk ? riskLabel(strongestRisk(topRisk.item)) : '-'}</div>
+              </div>
+            </div>
+          </div>
+          <div className="p-6">
+            <div className="text-sm font-semibold text-slate-500">主要受影响用户</div>
+            <div className="mt-3 flex items-center gap-3">
+              <Users className="h-8 w-8 text-blue-600" />
+              <div className="text-sm font-semibold leading-6 text-slate-900">
+                {affectedAudiences.slice(0, 2).map((item) => item.audience).join('、') || '暂无'}
+              </div>
+            </div>
+          </div>
+          <div className="p-6">
+            <div className="text-sm font-semibold text-slate-500">优先修改项</div>
+            <div className="mt-3 flex items-center gap-3">
+              <Badge className="bg-red-500 text-white">P0</Badge>
+              <div className="text-sm font-semibold leading-6 text-slate-900">{topRisk?.module.module_title ?? '暂无'}</div>
+            </div>
+          </div>
+        </div>
+      </Card>
 
-          <section className="space-y-4">
-            <SectionTitle title="二、分用户群模块分析" description="按 PRD 模块逐项输出行为判断、CTR/UV/PV 风险等级与风险指数。" />
-            <div className="space-y-4">
-              {result.modules.map((module) => (
-                <Card key={module.module_key} className="p-6">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="text-lg font-semibold text-slate-900">{module.module_title}</div>
-                      <div className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">{module.module_summary}</div>
-                    </div>
-                  </div>
-                  <div className="mt-5 grid gap-4 xl:grid-cols-2">
-                    {module.audience_results.map((item) => (
-                      <div key={`${module.module_key}-${item.audience_key}`} className="rounded-2xl border border-slate-200 p-4">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="font-medium text-slate-900">{item.audience_name}</div>
-                          <div className="flex gap-2 text-base">
-                            <span title={`CTR ${riskLabel(item.risk_ratings.ctr)}`}>{riskEmoji(item.risk_ratings.ctr)}</span>
-                            <span title={`UV ${riskLabel(item.risk_ratings.uv)}`}>{riskEmoji(item.risk_ratings.uv)}</span>
-                            <span title={`PV ${riskLabel(item.risk_ratings.pv)}`}>{riskEmoji(item.risk_ratings.pv)}</span>
-                          </div>
-                        </div>
-                        <div className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
-                          <div><span className="font-medium text-slate-900">会做什么：</span>{item.behavior.will_do}</div>
-                          <div><span className="font-medium text-slate-900">会卡在哪：</span>{item.behavior.get_stuck_at}</div>
-                          <div><span className="font-medium text-slate-900">不会做什么：</span>{item.behavior.wont_do}</div>
-                          <div className="rounded-2xl bg-slate-50 p-3">
-                            <div className="font-medium text-slate-900">风险评级</div>
-                            <div className="mt-2">CTR {riskEmoji(item.risk_ratings.ctr)} · UV {riskEmoji(item.risk_ratings.uv)} · PV {riskEmoji(item.risk_ratings.pv)}</div>
-                            <div className="mt-3">
-                              <div className="mb-2 text-xs font-medium text-slate-500">风险指数</div>
-                              <MetricBars item={item} />
-                            </div>
-                            <div className="mt-2 text-slate-500">原因：{item.risk_reason}</div>
-                          </div>
-                        </div>
+      <section>
+        <div className="mb-4 flex items-center justify-between">
+          <SectionTitle title="2. 陪审团模拟投票" description="按用户群与 PRD 模块展示支持、犹豫、反对分布。" />
+          <div className="flex gap-4 text-xs font-medium">
+            {Object.entries(voteMeta).map(([key, meta]) => (
+              <span key={key} className="flex items-center gap-1 text-slate-500">
+                <span className={cn('h-2 w-2 rounded-full', meta.color)} />
+                {meta.label}
+              </span>
+            ))}
+          </div>
+        </div>
+        <Card className="overflow-hidden p-0">
+          <div className="overflow-x-auto">
+            <table className="min-w-full border-collapse text-sm">
+              <thead>
+                <tr className="bg-slate-50 text-slate-500">
+                  <th className="w-44 border-b border-r border-slate-200 px-4 py-3 text-left font-semibold">用户陪审团</th>
+                  {result.modules.map((module) => (
+                    <th key={module.module_key} className="min-w-44 border-b border-r border-slate-200 px-4 py-3 text-center font-semibold">{module.module_title}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {result.report_meta.audiences.map((audience, index) => (
+                  <tr key={audience}>
+                    <td className="border-r border-slate-200 px-4 py-4 font-semibold text-slate-900">
+                      <div className="flex items-center gap-3">
+                        <span className={cn('flex h-8 w-8 items-center justify-center rounded-full text-xs', index % 2 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700')}>
+                          {audience.slice(0, 1)}
+                        </span>
+                        {audience}
                       </div>
-                    ))}
-                  </div>
-                </Card>
-              ))}
-            </div>
-          </section>
+                    </td>
+                    {result.modules.map((module) => {
+                      const item = module.audience_results.find((candidate) => candidate.audience_name === audience)
+                      return (
+                        <td key={`${audience}-${module.module_key}`} className="border-r border-slate-100 px-4 py-4">
+                          {item ? <VoteBar item={item} /> : <div className="h-8 rounded-full bg-slate-100" />}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      </section>
 
-          <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-            <Card className="p-6">
-              <SectionTitle title="三、多用户群对比汇总表" description="帮助快速识别不同用户群之间的高分歧模块；单元格数字为 CTR/UV/PV 平均风险指数。" />
-              <div className="mt-4 overflow-x-auto">
-                <table className="min-w-full border-separate border-spacing-y-2 text-sm">
-                  <thead>
-                    <tr className="text-left text-slate-500">
-                      <th className="px-3 py-2">模块</th>
-                      {result.report_meta.audiences.map((audience) => (
-                        <th key={audience} className="px-3 py-2">{audience}</th>
-                      ))}
-                      <th className="px-3 py-2">分歧结论</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {result.comparison_table.map((row) => (
-                      <tr key={row.module_key} className="rounded-2xl bg-slate-50 text-slate-700">
-                        <td className="rounded-l-2xl px-3 py-3 font-medium text-slate-900">{row.module_title}</td>
-                        {row.audiences.map((cell) => {
-                          const moduleResult = result.modules
-                            .find((module) => module.module_key === row.module_key)
-                            ?.audience_results.find((item) => item.audience_key === cell.audience_key)
-                          const score = moduleResult ? averageScore(moduleResult) : 0
-                          return (
-                            <td key={`${row.module_key}-${cell.audience_key}`} className="px-3 py-3">
-                              <div className="flex items-center gap-2">
-                                <span>{riskEmoji(cell.overall_risk)}</span>
-                                <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-slate-700">{score}</span>
-                              </div>
-                            </td>
-                          )
-                        })}
-                        <td className="rounded-r-2xl px-3 py-3">{divergenceLabel(row.divergence_level)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+      <section>
+        <SectionTitle title={`3. 观察指标分析（已选 ${Math.min(result.modules.length, 5)} 项）`} description="每张卡展示方向假设、影响强度、关联用户、风险原因和行为链路。" />
+        <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {sortedModules.slice(0, 6).map((module) => (
+            <IndicatorCard key={module.module_key} module={module} />
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <SectionTitle title="4. 建议修改方案" description="按优先级拆分为本轮必须改、建议优化和待验证事项。" />
+        <div className="mt-4 grid gap-4 xl:grid-cols-3">
+          {suggestionGroups.map((modules, groupIndex) => (
+            <div key={priorityMeta[groupIndex].title} className={cn('rounded-3xl border p-4', priorityMeta[groupIndex].className)}>
+              <div className="mb-4 flex items-center gap-3">
+                <Badge className={priorityMeta[groupIndex].badge}>{groupIndex === 0 ? 'P0' : groupIndex === 1 ? 'P1' : '实验'}</Badge>
+                <div className="font-semibold">{priorityMeta[groupIndex].title}</div>
               </div>
-            </Card>
-
-            <div className="space-y-6">
-              <Card className="p-6">
-                <SectionTitle title="高分歧模块" description="优先关注不同用户群判断最不一致的模块。" />
-                <div className="mt-4 space-y-3">
-                  {result.high_divergence_modules.length ? result.high_divergence_modules.map((item) => (
-                    <div key={item.module_key} className="rounded-2xl border border-slate-200 p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="font-medium text-slate-900">{item.module_title}</div>
-                        <Badge className={item.divergence_level === 'high' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}>
-                          {divergenceLabel(item.divergence_level)}
-                        </Badge>
-                      </div>
-                      <div className="mt-2 text-sm leading-6 text-slate-600">{item.reason}</div>
-                    </div>
-                  )) : <div className="rounded-2xl border border-dashed border-slate-300 p-5 text-sm text-slate-500">当前未识别出高分歧模块。</div>}
-                </div>
-              </Card>
-
-              <Card className="p-6">
-                <SectionTitle title="四、结论摘要" description="只做汇总，不提供该怎么改的建议。" />
-                <div className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
-                  <div><span className="font-medium text-slate-900">高风险模块：</span>{result.conclusion.high_risk_modules.join('、') || '无'}</div>
-                  <div><span className="font-medium text-slate-900">高分歧模块：</span>{result.conclusion.high_divergence_modules.join('、') || '无'}</div>
-                  <div><span className="font-medium text-slate-900">最高风险指数：</span>{topRiskItem ? `${topRiskItem.moduleTitle} / ${topRiskItem.audienceName} / ${topRiskItem.score}` : '无'}</div>
-                  <div><span className="font-medium text-slate-900">覆盖用户群：</span>{result.conclusion.covered_audiences.join('、') || '无'}</div>
-                </div>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {result.confidence_notes.map((note) => <Badge key={note} className="bg-amber-100 text-amber-800">{note}</Badge>)}
-                </div>
-              </Card>
+              <div className="space-y-3">
+                {modules.length ? modules.map((module, index) => {
+                  const item = [...module.audience_results].sort((a, b) => averageScore(b) - averageScore(a))[0]
+                  return <SuggestionCard key={module.module_key} module={module} item={item} index={index} />
+                }) : (
+                  <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-5 text-sm text-slate-500">暂无对应模块。</div>
+                )}
+              </div>
             </div>
-          </section>
-        </>
-      ) : null}
+          ))}
+        </div>
+      </section>
+
+      <Card className="p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
+          <div>
+            说明：风险等级定义为 高（严重影响核心目标）/ 中高（较大影响，需优先处理）/ 中（中等影响，计划优化）/ 低（影响较小，可跟踪验证）。
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <GhostButton className="px-3 py-1.5 text-xs">
+              <Clipboard className="mr-2 h-3.5 w-3.5" />
+              复制到 PRD
+            </GhostButton>
+            <GhostButton className="px-3 py-1.5 text-xs">
+              <FlaskConical className="mr-2 h-3.5 w-3.5" />
+              生成实验指标
+            </GhostButton>
+            <GhostButton className="px-3 py-1.5 text-xs">
+              标记已采纳
+              <ArrowRight className="ml-2 h-3.5 w-3.5" />
+            </GhostButton>
+          </div>
+        </div>
+      </Card>
     </div>
   )
 }

@@ -1,7 +1,27 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { AlertTriangle, Check, LoaderCircle, Pencil, RefreshCcw, Trash2, X } from 'lucide-react'
+import {
+  AlertTriangle,
+  BarChart3,
+  Check,
+  ChevronRight,
+  ChevronUp,
+  FileText,
+  Gauge,
+  Link2,
+  LoaderCircle,
+  Pencil,
+  Plus,
+  RefreshCcw,
+  Save,
+  Search,
+  Sparkles,
+  Trash2,
+  Upload,
+  Users,
+  X,
+} from 'lucide-react'
 import { api } from '../api'
 import { Badge, Button, Card, GhostButton, Input, Label, SectionTitle, Textarea } from '../components/ui'
 import type { AudienceDefinition, ManualAudienceInput } from '../types/api'
@@ -31,6 +51,10 @@ const TAG_GROUPS = [
   { name: '新功能接受度', values: ['保守', '观望', '愿意尝试', '尝鲜驱动'] },
   { name: '隐私敏感度', values: ['低隐私敏感', '中隐私敏感', '高隐私敏感', '极高隐私敏感'] },
 ]
+
+const METRICS = ['入口点击率', '发布完成率', '二跳流失率', '互动率', '留存意愿', '信任感']
+
+const audienceIcons = ['bg-emerald-100 text-emerald-600', 'bg-blue-100 text-blue-600', 'bg-violet-100 text-violet-600', 'bg-orange-100 text-orange-600']
 
 function parseLines(values: string[]) {
   return values.map((value) => value.trim()).filter(Boolean)
@@ -87,12 +111,13 @@ export function TaskWizardPage() {
   const [selectedCustomKeys, setSelectedCustomKeys] = useState<string[]>([])
   const [customAudiences, setCustomAudiences] = useState<CustomAudience[]>([])
   const [composerOpen, setComposerOpen] = useState(false)
-  const [juryOpen, setJuryOpen] = useState(true)
+  const [juryOpen, setJuryOpen] = useState(false)
   const [draftChips, setDraftChips] = useState<string[]>([])
+  const [selectedMetrics, setSelectedMetrics] = useState<string[]>(METRICS.slice(0, 4))
   const [editingCustomKey, setEditingCustomKey] = useState<string | null>(null)
   const [detail, setDetail] = useState<AudienceDetail | null>(null)
-  const [documentTitle, setDocumentTitle] = useState('')
-  const [documentContent, setDocumentContent] = useState('')
+  const [documentTitle, setDocumentTitle] = useState<string | null>(null)
+  const [documentContent, setDocumentContent] = useState<string | null>(null)
 
   const documentQuery = useQuery({ queryKey: ['demo-document'], queryFn: api.getDemoDocument })
   const audiencesQuery = useQuery({ queryKey: ['audiences'], queryFn: api.listAudiences })
@@ -101,36 +126,50 @@ export function TaskWizardPage() {
     void safeLogEvent('jury_capsule_exposed', { page: 'jury_workbench' })
   }, [])
 
-  useEffect(() => {
-    const document = documentQuery.data ?? (documentQuery.isError ? FALLBACK_DEMO_DOCUMENT : null)
-    if (document) {
-      setDocumentTitle(document.title)
-      setDocumentContent(document.content)
-    }
-  }, [documentQuery.data, documentQuery.isError])
-
   const audienceSource = useMemo(() => {
     const data = audiencesQuery.data ?? []
     return data.length ? data : FALLBACK_AUDIENCES
   }, [audiencesQuery.data])
+
+  const loadedDocument = documentQuery.data ?? (documentQuery.isError ? FALLBACK_DEMO_DOCUMENT : null)
+  const effectiveDocumentTitle = documentTitle ?? loadedDocument?.title ?? ''
+  const effectiveDocumentContent = documentContent ?? loadedDocument?.content ?? ''
 
   const selectedFallbackAudiences = useMemo(
     () => audienceSource.filter((item) => item.source === 'frontend_fallback' && selectedAudienceKeys.includes(item.key)),
     [audienceSource, selectedAudienceKeys],
   )
 
+  const selectedAudiences = useMemo(
+    () => audienceSource.filter((item) => selectedAudienceKeys.includes(item.key)),
+    [audienceSource, selectedAudienceKeys],
+  )
+
+  const selectedCustomAudiences = useMemo(
+    () => customAudiences.filter((audience) => selectedCustomKeys.includes(audience.key)),
+    [customAudiences, selectedCustomKeys],
+  )
+
+  const totalAudienceCount = selectedAudienceKeys.length + selectedCustomKeys.length
+  const canRun = effectiveDocumentTitle.trim().length > 0 && effectiveDocumentContent.trim().length >= 20 && totalAudienceCount >= 1 && totalAudienceCount <= 5
+  const disabledReason = !effectiveDocumentTitle.trim() || effectiveDocumentContent.trim().length < 20
+    ? '文档未加载完成'
+    : totalAudienceCount < 1
+      ? '请先选择至少 1 个陪审团标签'
+      : totalAudienceCount > 5
+        ? '最多选择 5 个用户群'
+        : ''
+
   const runAnalysisMutation = useMutation({
     mutationFn: async () => {
-      const manualAudiences = customAudiences
-        .filter((audience) => selectedCustomKeys.includes(audience.key))
-        .map((audience) => ({
-          name: audience.name,
-          definition: audience.definition,
-          conversion_trait: audience.conversion_trait,
-          dwell_trait: audience.dwell_trait,
-          dropoff_points: parseLines(audience.dropoff_points),
-          content_preferences: parseLines(audience.content_preferences),
-        }))
+      const manualAudiences = selectedCustomAudiences.map((audience) => ({
+        name: audience.name,
+        definition: audience.definition,
+        conversion_trait: audience.conversion_trait,
+        dwell_trait: audience.dwell_trait,
+        dropoff_points: parseLines(audience.dropoff_points),
+        content_preferences: parseLines(audience.content_preferences),
+      }))
       const fallbackManualAudiences = selectedFallbackAudiences.map((audience) => ({
         name: audience.name,
         definition: audience.definition,
@@ -142,8 +181,8 @@ export function TaskWizardPage() {
       const selectedBackendKeys = selectedAudienceKeys.filter((key) => !selectedFallbackAudiences.some((audience) => audience.key === key))
       return api.runAnalysis({
         document: {
-          title: documentTitle.trim(),
-          content: documentContent.trim(),
+          title: effectiveDocumentTitle.trim(),
+          content: effectiveDocumentContent.trim(),
           host: documentQuery.data?.host ?? FALLBACK_DEMO_DOCUMENT.host,
           source_mode: 'host',
         },
@@ -152,7 +191,7 @@ export function TaskWizardPage() {
       })
     },
     onSuccess: async (job) => {
-      await safeLogEvent('jury_report_generated', { job_id: job.id, audience_count: selectedAudienceKeys.length + selectedCustomKeys.length })
+      await safeLogEvent('jury_report_generated', { job_id: job.id, audience_count: totalAudienceCount, metrics: selectedMetrics })
       navigate(`/analysis/${job.id}`)
     },
     onError: async (error) => {
@@ -160,30 +199,11 @@ export function TaskWizardPage() {
     },
   })
 
-  const selectedAudiences = useMemo(
-    () => audienceSource.filter((item) => selectedAudienceKeys.includes(item.key)),
-    [audienceSource, selectedAudienceKeys],
-  )
-
-  const totalAudienceCount = selectedAudienceKeys.length + selectedCustomKeys.length
-  const canRun = documentTitle.trim().length > 0 && documentContent.trim().length >= 20 && totalAudienceCount >= 1 && totalAudienceCount <= 5
-  const disabledReason = !documentTitle.trim() || documentContent.trim().length < 20
-    ? '文档未加载完成'
-    : totalAudienceCount < 1
-      ? '请先选择至少 1 个陪审团标签'
-      : totalAudienceCount > 5
-        ? '最多选择 5 个用户群'
-        : ''
-
   const toggleAudience = async (key: string) => {
     setSelectedAudienceKeys((current) => {
       const exists = current.includes(key)
-      if (exists) {
-        return current.filter((item) => item !== key)
-      }
-      if (current.length + selectedCustomKeys.length >= 5) {
-        return current
-      }
+      if (exists) return current.filter((item) => item !== key)
+      if (current.length + selectedCustomKeys.length >= 5) return current
       return [...current, key]
     })
     await safeLogEvent('jury_audience_selected', { audience_key: key })
@@ -203,6 +223,10 @@ export function TaskWizardPage() {
     setDraftChips((current) => current.includes(chip) ? current.filter((item) => item !== chip) : [...current, chip])
   }
 
+  const toggleMetric = (metric: string) => {
+    setSelectedMetrics((current) => current.includes(metric) ? current.filter((item) => item !== metric) : [...current, metric])
+  }
+
   const completeCustomAudience = async () => {
     if (!draftChips.length) return
     if (editingCustomKey) {
@@ -215,6 +239,7 @@ export function TaskWizardPage() {
       const name = `自定义标签${customAudiences.length + 1}`
       const key = `custom_${Date.now()}`
       setCustomAudiences((current) => [...current, { key, chips: draftChips, ...buildManualAudience(name, draftChips) }])
+      setSelectedCustomKeys((current) => current.length + selectedAudienceKeys.length < 5 ? [...current, key] : current)
     }
     setDraftChips([])
     setComposerOpen(false)
@@ -225,6 +250,7 @@ export function TaskWizardPage() {
     setDraftChips(audience.chips)
     setEditingCustomKey(audience.key)
     setComposerOpen(true)
+    setJuryOpen(true)
     setDetail(null)
   }
 
@@ -259,25 +285,68 @@ export function TaskWizardPage() {
     setDraftChips(chips)
     setEditingCustomKey(key)
     setComposerOpen(true)
+    setJuryOpen(true)
     setDetail(null)
   }
 
-  return (
-    <div className="relative min-h-[78vh] overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-sm">
-      <div className="grid min-h-[78vh] lg:grid-cols-[1.2fr_0.8fr]">
-        <section className="border-r border-slate-200 bg-[#f5f7fb] p-6 lg:p-8">
-          <div className="flex items-start gap-4">
-            <div>
-              <Badge className="bg-blue-100 text-blue-700">Mock Feishu Document</Badge>
-              <h1 className="mt-4 text-3xl font-semibold tracking-tight text-slate-900">用户实时陪审团</h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
-                模拟 PM 在飞书文档内写 PRD 时，点击右侧“陪审团”胶囊，直接选择目标用户群并生成模块级风险判断报告。
-              </p>
-            </div>
-          </div>
+  const openPicker = () => {
+    setJuryOpen(true)
+    setComposerOpen(false)
+  }
 
-          <Card className="mt-6 p-5">
-            <div className="flex items-center justify-between gap-3">
+  const openComposer = () => {
+    setJuryOpen(true)
+    setComposerOpen(true)
+  }
+
+  return (
+    <div className="relative mx-auto max-w-6xl">
+      <div className={cn('grid gap-6 transition-all duration-300', juryOpen ? 'xl:grid-cols-[minmax(0,1fr)_360px]' : 'xl:grid-cols-1')}>
+        <main className="space-y-5">
+          <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="absolute inset-y-0 right-0 hidden w-60 bg-gradient-to-l from-blue-100 via-blue-50 to-transparent lg:block" />
+            <div className="relative flex items-start gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/20">
+                <Users className="h-6 w-6" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-semibold tracking-tight text-slate-950">用户实时陪审团</h1>
+                <p className="mt-3 text-base font-medium text-slate-800">帮 PM 在评审前快速发现不同用户视角下的方案风险</p>
+                <p className="mt-1 text-sm text-slate-500">输出为用户视角风险假设，不替代真实实验或用户调研。</p>
+              </div>
+            </div>
+          </section>
+
+          <Card className="p-5">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-5">
+                <div className="flex items-center gap-3">
+                  <Link2 className="h-5 w-5 text-blue-600" />
+                  <div>
+                    <div className="font-semibold text-slate-900">粘贴 PRD 链接</div>
+                    <div className="mt-1 text-sm text-slate-500">解析 PRD，智能提取关键信息</div>
+                  </div>
+                </div>
+                <Input className="mt-4 bg-white" placeholder="输入飞书文档链接" />
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                <div className="flex items-center gap-3">
+                  <FileText className="h-5 w-5 text-blue-600" />
+                  <div>
+                    <div className="font-semibold text-slate-900">上传本地文档</div>
+                    <div className="mt-1 text-sm text-slate-500">支持 PDF / DOC / TXT 等格式</div>
+                  </div>
+                </div>
+                <button type="button" className="mt-4 flex w-full items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">
+                  <Upload className="h-4 w-4" />
+                  点击或拖拽文件上传
+                </button>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <SectionTitle title="当前文档上下文" description="Demo 通过 mock host 读取当前文档内容，可直接修改以模拟 PRD 实时变化。" />
               <GhostButton onClick={() => documentQuery.refetch()} disabled={documentQuery.isFetching}>
                 <RefreshCcw className={cn('mr-2 h-4 w-4', documentQuery.isFetching && 'animate-spin')} />刷新文档
@@ -286,241 +355,301 @@ export function TaskWizardPage() {
             <div className="mt-5 grid gap-4">
               <div>
                 <Label>文档标题</Label>
-                <Input value={documentTitle} onChange={(event) => setDocumentTitle(event.target.value)} placeholder="当前 PRD 标题" />
+                <Input value={effectiveDocumentTitle} onChange={(event) => setDocumentTitle(event.target.value)} placeholder="当前 PRD 标题" />
               </div>
               <div>
                 <Label>文档内容</Label>
-                <Textarea rows={20} value={documentContent} onChange={(event) => setDocumentContent(event.target.value)} className="font-mono text-xs leading-6" />
+                <Textarea rows={13} value={effectiveDocumentContent} onChange={(event) => setDocumentContent(event.target.value)} className="resize-y font-mono text-xs leading-6" />
               </div>
             </div>
           </Card>
-        </section>
 
-        <aside className="relative bg-white p-6 lg:p-8">
-          <div className="flex items-start gap-3">
-            <div>
-              <div className="text-lg font-semibold text-slate-900">陪审团</div>
-              <p className="mt-1 text-sm text-slate-500">选择 2-5 个目标用户群，生成“行为判断 + CTR/UV/PV 风险评级 + 风险指数”报告。</p>
+          <Card className="p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <SectionTitle title="选择用户陪审团" description="从预设人群标签中选择，快速匹配多元视角" />
+              <button
+                type="button"
+                onClick={openPicker}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm hover:border-blue-200 hover:text-blue-600"
+                aria-label="展开用户陪审团选择"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
             </div>
-          </div>
-
-          <Card className="mt-5 border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-            <div className="flex gap-3">
-              <AlertTriangle className="mt-0.5 h-4 w-4" />
-              <div>只做判断，不给优化建议；风险指数是 0-100 的方向性估算，不代表真实线上百分比。</div>
+            <div className="mt-5 grid gap-3 md:grid-cols-4">
+              {audienceSource.slice(0, 4).map((audience, index) => {
+                const active = selectedAudienceKeys.includes(audience.key)
+                return (
+                  <button
+                    key={audience.key}
+                    type="button"
+                    onClick={() => void toggleAudience(audience.key)}
+                    className={cn(
+                      'flex min-h-16 items-center gap-3 rounded-2xl border p-4 text-left transition',
+                      active ? 'border-blue-500 bg-blue-50 shadow-sm' : 'border-slate-200 bg-white hover:border-blue-200',
+                    )}
+                  >
+                    <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-xl', audienceIcons[index % audienceIcons.length])}>
+                      <Users className="h-5 w-5" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="flex items-center gap-1 font-medium text-slate-900">
+                        {audience.name}
+                        {active ? <Check className="h-4 w-4 text-blue-600" /> : null}
+                      </span>
+                      <span className="line-clamp-1 text-xs text-slate-500">{audience.definition}</span>
+                    </span>
+                  </button>
+                )
+              })}
             </div>
-          </Card>
 
-          <div className="mt-6 space-y-5">
-            <Card className="p-4">
-              <div className="flex items-start justify-between gap-3">
-                <SectionTitle title={editingCustomKey ? '编辑自定义标签组合' : '自定义标签组合'} description="平常默认收起，需要时点击创建或编辑。" />
-                <GhostButton
-                  onClick={() => setComposerOpen((value) => !value)}
-                  className="shrink-0"
-                >
-                  {composerOpen ? '收起' : '创建自定义标签'}
+            <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-3">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center">
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium text-slate-900">自定义标签组合 <span className="text-sm font-normal text-slate-400">（选填）</span></div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {selectedCustomAudiences.map((audience) => (
+                      <Badge key={audience.key} className="bg-violet-100 text-violet-700">{audience.name}</Badge>
+                    ))}
+                    {!selectedCustomAudiences.length ? <span className="text-sm text-slate-400">添加你的自定义标签，按回车确认</span> : null}
+                  </div>
+                </div>
+                <GhostButton onClick={openComposer} className="shrink-0 border-blue-100 bg-blue-50 text-blue-700 hover:bg-blue-100">
+                  <Plus className="mr-2 h-4 w-4" />
+                  创建自定义标签组合
                 </GhostButton>
               </div>
-              {!composerOpen ? (
-                <div className="mt-3 text-sm text-slate-500">
-                  已创建 {customAudiences.length} 个自定义标签；点击上方按钮展开组合器。
+            </div>
+          </Card>
+
+          <Card className="p-5">
+            <SectionTitle title="选择观察指标" description="搜索或选择你希望重点关注的指标" />
+            <div className="mt-4 flex items-center gap-2 rounded-xl border border-blue-300 bg-white px-3 py-2 shadow-sm shadow-blue-100">
+              <Search className="h-4 w-4 text-slate-400" />
+              <input className="min-w-0 flex-1 border-0 bg-transparent text-sm outline-none placeholder:text-slate-400" placeholder="搜索观察指标，例如：入口点击率" />
+            </div>
+            <div className="mt-4 grid gap-4 rounded-2xl border border-slate-100 bg-white p-4 md:grid-cols-2">
+              <div>
+                <div className="text-xs font-medium text-slate-500">热门搜索</div>
+                <div className="mt-2 space-y-2 text-sm text-slate-600">
+                  {METRICS.slice(0, 5).map((metric) => (
+                    <button key={metric} type="button" onClick={() => toggleMetric(metric)} className="block hover:text-blue-600">◆ {metric}</button>
+                  ))}
                 </div>
-              ) : (
-                <>
-                  <div className="mt-4 space-y-4">
-                    {TAG_GROUPS.map((group) => (
-                      <div key={group.name}>
-                        <div className="mb-2 text-xs font-medium text-slate-500">{group.name}</div>
-                        <div className="flex flex-wrap gap-2">
-                          {group.values.map((chip) => {
-                            const active = draftChips.includes(chip)
-                            return (
-                              <button
-                                key={chip}
-                                type="button"
-                                onClick={() => toggleDraftChip(chip)}
-                                className={cn(
-                                  'rounded-full border px-3 py-1.5 text-xs font-medium transition',
-                                  active ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-400',
-                                )}
-                              >
-                                {chip}
-                              </button>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-4 flex items-center justify-between gap-3">
-                    <div className="text-xs text-slate-500">已组合 {draftChips.length} 个标签</div>
-                    <div className="flex gap-2">
-                      {editingCustomKey ? (
-                        <GhostButton onClick={() => { setEditingCustomKey(null); setDraftChips([]); setComposerOpen(false) }}>
-                          取消编辑
+              </div>
+              <div>
+                <div className="text-xs font-medium text-slate-500">最近使用</div>
+                <div className="mt-2 space-y-2 text-sm text-slate-600">
+                  {METRICS.slice(1, 5).map((metric) => (
+                    <button key={metric} type="button" onClick={() => toggleMetric(metric)} className="block hover:text-blue-600">◆ {metric}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          <div className="sticky bottom-0 z-10 -mx-2 border-t border-slate-200 bg-white/90 px-2 py-4 backdrop-blur">
+            <div className="flex flex-col gap-3 rounded-2xl bg-white md:flex-row md:items-center md:justify-between">
+              <div className="text-sm font-medium text-slate-700">
+                已选择 {totalAudienceCount} 类陪审团，{selectedMetrics.length} 个观察指标，预计 30 秒生成快速反馈。
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  className="bg-blue-600 shadow-lg shadow-blue-600/20 hover:bg-blue-700"
+                  disabled={!canRun || runAnalysisMutation.isPending}
+                  onClick={() => runAnalysisMutation.mutate()}
+                  title={!canRun ? disabledReason : '生成快速反馈'}
+                >
+                  {runAnalysisMutation.isPending ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                  生成快速反馈
+                </Button>
+                <GhostButton disabled={!canRun || runAnalysisMutation.isPending} onClick={() => runAnalysisMutation.mutate()}>
+                  <BarChart3 className="mr-2 h-4 w-4" />
+                  进入完整分析
+                </GhostButton>
+              </div>
+            </div>
+            {!canRun ? <div className="mt-2 text-right text-xs text-slate-500">{disabledReason}</div> : null}
+            {runAnalysisMutation.isError ? (
+              <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                {runAnalysisMutation.error instanceof Error ? runAnalysisMutation.error.message : '生成失败，请稍后重试。'}
+              </div>
+            ) : null}
+          </div>
+        </main>
+
+        {juryOpen ? (
+          <aside className="fixed inset-y-0 right-0 z-30 w-full max-w-md overflow-y-auto border-l border-slate-200 bg-white p-6 shadow-2xl shadow-slate-900/15 xl:sticky xl:top-8 xl:max-h-[calc(100vh-4rem)] xl:w-auto xl:rounded-3xl xl:border xl:shadow-sm">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">{composerOpen ? '自定义标签组合' : '选择用户陪审团'}</h2>
+                <p className="mt-1 text-sm text-slate-500">{composerOpen ? '按需组合标签，精准定义你的陪审团' : '选择 1-5 个目标用户群参与分析'}</p>
+              </div>
+              <button type="button" onClick={() => setJuryOpen(false)} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <Card className="mt-5 border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 shadow-none">
+              <div className="flex gap-3">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <div>只做判断，不给优化建议；风险指数是 0-100 的方向性估算。</div>
+              </div>
+            </Card>
+
+            <div className="mt-5 flex rounded-xl bg-slate-100 p-1 text-sm font-medium">
+              <button type="button" onClick={() => setComposerOpen(false)} className={cn('flex-1 rounded-lg px-3 py-2', !composerOpen ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500')}>
+                用户群
+              </button>
+              <button type="button" onClick={() => setComposerOpen(true)} className={cn('flex-1 rounded-lg px-3 py-2', composerOpen ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500')}>
+                自定义
+              </button>
+            </div>
+
+            {!composerOpen ? (
+              <div className="mt-5 space-y-3">
+                {audienceSource.map((audience) => {
+                  const active = selectedAudienceKeys.includes(audience.key)
+                  const atLimit = !active && totalAudienceCount >= 5
+                  return (
+                    <div key={audience.key} className={cn('rounded-2xl border p-4 transition', active ? 'border-blue-500 bg-blue-50' : 'border-slate-200 bg-white', atLimit && 'opacity-60')}>
+                      <div className="flex items-start gap-3">
+                        <button type="button" disabled={atLimit} onClick={() => void toggleAudience(audience.key)} className="min-w-0 flex-1 text-left disabled:cursor-not-allowed">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-slate-900">{audience.name}</span>
+                            {active ? <Check className="h-4 w-4 shrink-0 text-blue-600" /> : null}
+                          </div>
+                          <div className="mt-1 line-clamp-2 text-sm leading-5 text-slate-500">{audience.definition}</div>
+                        </button>
+                        <GhostButton className="shrink-0 px-3 py-1.5 text-xs" onClick={() => setDetail({ type: 'default', audience })}>
+                          详情
                         </GhostButton>
-                      ) : null}
-                      <Button disabled={!draftChips.length} onClick={() => void completeCustomAudience()}>
-                        完成组合
-                      </Button>
+                      </div>
+                    </div>
+                  )
+                })}
+
+                {customAudiences.map((audience) => {
+                  const active = selectedCustomKeys.includes(audience.key)
+                  const atLimit = !active && totalAudienceCount >= 5
+                  return (
+                    <div key={audience.key} className={cn('rounded-2xl border p-4 transition', active ? 'border-violet-500 bg-violet-50' : 'border-violet-100 bg-white', atLimit && 'opacity-60')}>
+                      <div className="flex items-start gap-3">
+                        <button type="button" disabled={atLimit} onClick={() => void toggleCustomAudience(audience.key)} className="min-w-0 flex-1 text-left disabled:cursor-not-allowed">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-slate-900">{audience.name}</span>
+                            {active ? <Check className="h-4 w-4 shrink-0 text-violet-600" /> : null}
+                          </div>
+                          <div className="mt-1 line-clamp-2 text-sm leading-5 text-violet-700">{audience.chips.join('、')}</div>
+                        </button>
+                        <GhostButton className="shrink-0 px-3 py-1.5 text-xs" onClick={() => setDetail({ type: 'custom', audience })}>
+                          详情
+                        </GhostButton>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="mt-5 space-y-5">
+                {TAG_GROUPS.map((group) => (
+                  <div key={group.name} className="border-b border-slate-100 pb-4">
+                    <div className="mb-3 flex items-center justify-between">
+                      <div className="text-sm font-semibold text-slate-700">{group.name}</div>
+                      <ChevronUp className="h-4 w-4 text-slate-400" />
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {group.values.map((chip) => {
+                        const active = draftChips.includes(chip)
+                        return (
+                          <button
+                            key={chip}
+                            type="button"
+                            onClick={() => toggleDraftChip(chip)}
+                            className={cn(
+                              'rounded-full border px-3 py-1.5 text-xs font-medium transition',
+                              active ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-400',
+                            )}
+                          >
+                            {chip}
+                          </button>
+                        )
+                      })}
                     </div>
                   </div>
-                </>
-              )}
+                ))}
+                <div className="sticky bottom-0 -mx-6 border-t border-slate-200 bg-white px-6 py-4">
+                  <div className="text-sm text-slate-600">条件：{draftChips.length ? draftChips.join(' & ') : '请选择标签'}</div>
+                  <div className="mt-3 flex justify-end gap-2">
+                    <GhostButton onClick={() => { setEditingCustomKey(null); setDraftChips([]); setComposerOpen(false) }}>
+                      取消
+                    </GhostButton>
+                    <Button disabled={!draftChips.length} onClick={() => void completeCustomAudience()}>
+                      <Save className="mr-2 h-4 w-4" />
+                      保存并应用
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <Card className="mt-5 bg-slate-50 p-4 shadow-none">
+              <div className="text-sm font-medium text-slate-900">当前已选用户群</div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {selectedAudiences.map((audience) => <Badge key={audience.key}>{audience.name}</Badge>)}
+                {selectedCustomAudiences.map((audience) => <Badge key={audience.key} className="bg-violet-100 text-violet-700">{audience.name}</Badge>)}
+                {!selectedAudiences.length && !selectedCustomAudiences.length ? <span className="text-sm text-slate-500">请至少选择 1 个用户群，建议 2-5 个。</span> : null}
+              </div>
+              <div className="mt-4 text-xs leading-5 text-slate-500">{totalAudienceCount}/5 个用户群</div>
             </Card>
 
-            <div>
-              <div className="flex items-start justify-between gap-3">
-                <SectionTitle title="选择陪审团" description="点击标签卡片选择参与陪审；点击详情可查看、编辑或删除标签。" />
-                <GhostButton onClick={() => setJuryOpen((value) => !value)} className="shrink-0">
-                  {juryOpen ? '收起' : '展开'}
-                </GhostButton>
-              </div>
-              {!juryOpen ? (
-                <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
-                  已收起陪审团选择区；当前已选 {totalAudienceCount}/5 个用户群。
+            {detail ? (
+              <Card className="mt-4 p-4 shadow-none">
+                <div className="flex items-start justify-between gap-3">
+                  <SectionTitle title={detail.audience.name} description={detail.type === 'default' ? '系统默认人格标签' : '自定义组合标签'} />
+                  <button type="button" onClick={() => setDetail(null)} className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
-              ) : (
-                <div className="mt-3 grid gap-3">
-                  {audienceSource.map((audience) => {
-                    const active = selectedAudienceKeys.includes(audience.key)
-                    const atLimit = !active && totalAudienceCount >= 5
-                    return (
-                      <div
-                        key={audience.key}
-                        className={cn(
-                          'rounded-2xl border p-4 transition',
-                          active ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white',
-                          atLimit && 'opacity-60',
-                        )}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <button type="button" disabled={atLimit} onClick={() => void toggleAudience(audience.key)} className="min-w-0 flex-1 text-left disabled:cursor-not-allowed">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium">{audience.name}</span>
-                              {active ? <Check className="h-4 w-4 shrink-0" /> : null}
-                            </div>
-                            <div className={cn('mt-1 max-h-10 overflow-hidden text-sm', active ? 'text-slate-200' : 'text-slate-500')}>{audience.definition}</div>
-                          </button>
-                          <GhostButton
-                            className={cn('shrink-0 px-3 py-1.5 text-xs', active && 'border-slate-500 bg-slate-800 text-white hover:bg-slate-700')}
-                            onClick={() => setDetail({ type: 'default', audience })}
-                          >
-                            详情
-                          </GhostButton>
-                        </div>
-                      </div>
-                    )
-                  })}
-
-                  {customAudiences.map((audience) => {
-                    const active = selectedCustomKeys.includes(audience.key)
-                    const atLimit = !active && totalAudienceCount >= 5
-                    return (
-                      <div
-                        key={audience.key}
-                        className={cn(
-                          'rounded-2xl border p-4 transition',
-                          active ? 'border-violet-700 bg-violet-700 text-white' : 'border-violet-200 bg-violet-50',
-                          atLimit && 'opacity-60',
-                        )}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <button type="button" disabled={atLimit} onClick={() => void toggleCustomAudience(audience.key)} className="min-w-0 flex-1 text-left disabled:cursor-not-allowed">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium">{audience.name}</span>
-                              {active ? <Check className="h-4 w-4 shrink-0" /> : null}
-                            </div>
-                            <div className={cn('mt-1 max-h-10 overflow-hidden text-sm', active ? 'text-violet-100' : 'text-violet-700')}>{audience.chips.join('、')}</div>
-                          </button>
-                          <GhostButton
-                            className={cn('shrink-0 px-3 py-1.5 text-xs', active && 'border-violet-300 bg-violet-800 text-white hover:bg-violet-700')}
-                            onClick={() => setDetail({ type: 'custom', audience })}
-                          >
-                            详情
-                          </GhostButton>
-                        </div>
-                      </div>
-                    )
-                  })}
+                <div className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
+                  <div><span className="font-medium text-slate-900">定义：</span>{detail.audience.definition}</div>
+                  {'chips' in detail.audience ? <div><span className="font-medium text-slate-900">组合：</span>{detail.audience.chips.join('、')}</div> : null}
+                  <div><span className="font-medium text-slate-900">转化特征：</span>{detail.type === 'default' ? detail.audience.behavior_summary.conversion_trait : detail.audience.conversion_trait}</div>
+                  <div><span className="font-medium text-slate-900">停留特征：</span>{detail.type === 'default' ? detail.audience.behavior_summary.dwell_trait : detail.audience.dwell_trait}</div>
                 </div>
-              )}
-            </div>
-          </div>
-
-          <Card className="mt-6 bg-slate-50 p-4">
-            <div className="text-sm font-medium text-slate-900">当前已选用户群</div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {selectedAudiences.map((audience) => <Badge key={audience.key}>{audience.name}</Badge>)}
-              {customAudiences.filter((audience) => selectedCustomKeys.includes(audience.key)).map((audience) => (
-                <Badge key={audience.key} className="bg-violet-100 text-violet-700">{audience.name}</Badge>
-              ))}
-              {!selectedAudiences.length && !selectedCustomKeys.length ? <span className="text-sm text-slate-500">请至少选择 1 个用户群，建议 2-5 个。</span> : null}
-            </div>
-            <div className="mt-4 text-xs leading-5 text-slate-500">
-              {totalAudienceCount}/5 个用户群 · 报告会按 PRD 模块逐项输出定性判断、风险等级和风险指数。
-            </div>
-          </Card>
-
-          {detail ? (
-            <Card className="mt-4 p-4">
-              <div className="flex items-start justify-between gap-3">
-                <SectionTitle title={detail.audience.name} description={detail.type === 'default' ? '系统默认人格标签' : '自定义组合标签'} />
-                <button type="button" onClick={() => setDetail(null)} className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-              <div className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
-                <div><span className="font-medium text-slate-900">定义：</span>{detail.audience.definition}</div>
-                {'chips' in detail.audience ? <div><span className="font-medium text-slate-900">组合：</span>{detail.audience.chips.join('、')}</div> : null}
-                <div><span className="font-medium text-slate-900">转化特征：</span>{detail.type === 'default' ? detail.audience.behavior_summary.conversion_trait : detail.audience.conversion_trait}</div>
-                <div><span className="font-medium text-slate-900">停留特征：</span>{detail.type === 'default' ? detail.audience.behavior_summary.dwell_trait : detail.audience.dwell_trait}</div>
-                <div><span className="font-medium text-slate-900">流失节点：</span>{(detail.type === 'default' ? detail.audience.behavior_summary.dropoff_points : detail.audience.dropoff_points).join('、')}</div>
-                <div><span className="font-medium text-slate-900">内容偏好：</span>{(detail.type === 'default' ? detail.audience.behavior_summary.content_preferences : detail.audience.content_preferences).join('、')}</div>
-              </div>
-              <div className="mt-4 flex justify-end gap-2">
-                {detail.type === 'default' ? (
-                  <GhostButton onClick={() => cloneDefaultAudience(detail.audience)}>
-                    <Pencil className="mr-2 h-4 w-4" />编辑副本
-                  </GhostButton>
-                ) : (
-                  <>
-                    <GhostButton onClick={() => editCustomAudience(detail.audience)}>
-                      <Pencil className="mr-2 h-4 w-4" />编辑
+                <div className="mt-4 flex justify-end gap-2">
+                  {detail.type === 'default' ? (
+                    <GhostButton onClick={() => cloneDefaultAudience(detail.audience)}>
+                      <Pencil className="mr-2 h-4 w-4" />编辑副本
                     </GhostButton>
-                    <GhostButton className="border-red-200 text-red-700 hover:bg-red-50" onClick={() => deleteCustomAudience(detail.audience.key)}>
-                      <Trash2 className="mr-2 h-4 w-4" />删除
-                    </GhostButton>
-                  </>
-                )}
-              </div>
-            </Card>
-          ) : null}
-
-          {runAnalysisMutation.isError ? (
-            <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-              {runAnalysisMutation.error instanceof Error ? runAnalysisMutation.error.message : '生成失败，请稍后重试。'}
-            </div>
-          ) : null}
-
-          <div className="mt-6 flex justify-end">
-            <div className="flex flex-col items-end gap-2">
-              <Button
-                className={cn(canRun && !runAnalysisMutation.isPending && 'cursor-pointer shadow-lg shadow-slate-900/15 hover:-translate-y-0.5 hover:bg-blue-700')}
-                disabled={!canRun || runAnalysisMutation.isPending}
-                onClick={() => runAnalysisMutation.mutate()}
-                title={!canRun ? disabledReason : '开始生成陪审团报告'}
-              >
-                {runAnalysisMutation.isPending ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
-                开始审判 / 生成报告
-              </Button>
-              {!canRun ? <div className="text-xs text-slate-500">{disabledReason}</div> : null}
-            </div>
-          </div>
-        </aside>
+                  ) : (
+                    <>
+                      <GhostButton onClick={() => editCustomAudience(detail.audience)}>
+                        <Pencil className="mr-2 h-4 w-4" />编辑
+                      </GhostButton>
+                      <GhostButton className="border-red-200 text-red-700 hover:bg-red-50" onClick={() => deleteCustomAudience(detail.audience.key)}>
+                        <Trash2 className="mr-2 h-4 w-4" />删除
+                      </GhostButton>
+                    </>
+                  )}
+                </div>
+              </Card>
+            ) : null}
+          </aside>
+        ) : null}
       </div>
 
+      {!juryOpen ? (
+        <button
+          type="button"
+          onClick={openPicker}
+          className="fixed bottom-8 right-8 z-20 hidden items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-900 shadow-xl shadow-slate-900/15 ring-1 ring-slate-200 hover:text-blue-600 xl:flex"
+        >
+          <Gauge className="h-5 w-5 text-blue-600" />
+          陪审团
+        </button>
+      ) : null}
     </div>
   )
 }
