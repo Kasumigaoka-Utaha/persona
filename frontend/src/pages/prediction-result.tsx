@@ -3,8 +3,6 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
-  ArrowRight,
-  Clipboard,
   Download,
   FlaskConical,
   LoaderCircle,
@@ -157,6 +155,21 @@ function priorityLabel(score: number) {
 function impactPath(item?: AudienceModuleResult) {
   if (!item) return '用户无法形成明确判断，后续点击与转化承压。'
   return `${item.behavior.will_do}，但在「${item.behavior.get_stuck_at}」处产生阻滞，最终可能${item.behavior.wont_do}。`
+}
+
+function ReadableText({ text }: { text: string }) {
+  if (text.length <= 150) return <>{text}</>
+  const parts = text
+    .split(/[。；;]/u)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .slice(0, 4)
+  return (
+    <span className="block space-y-1">
+      <span className="block font-medium text-slate-900">要点：</span>
+      {parts.map((part, index) => <span key={part} className="block">{index + 1}. {part}</span>)}
+    </span>
+  )
 }
 
 function userMindset(item?: AudienceModuleResult) {
@@ -312,9 +325,13 @@ export function PredictionResultPage() {
               {suggestionMutation.isPending ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
               生成修改建议
             </Button>
+            <GhostButton>
+              <FlaskConical className="mr-2 h-4 w-4" />
+              生成实验指标
+            </GhostButton>
             <GhostButton onClick={() => exportMutation.mutate()} disabled={exportMutation.isPending}>
               <Download className="mr-2 h-4 w-4" />
-              导出摘要
+              导出报告
             </GhostButton>
           </div>
         </div>
@@ -371,12 +388,13 @@ export function PredictionResultPage() {
                       {result.modules.map((module) => {
                         const item = module.audience_results.find((candidate) => candidate.audience_name === audience)
                         const attitude = item ? itemAttitude(item, metrics) : 'unknown'
+                        const score = item ? averageScore(item, metrics) : 0
                         return (
                           <td key={`${audience}-${module.module_key}`} className="px-4 py-4">
                             <div className="h-3 overflow-hidden rounded-full bg-slate-100">
-                              <div className={cn('h-full rounded-full', voteMeta[attitude].color)} style={{ width: item ? `${Math.max(18, averageScore(item, metrics))}%` : '100%' }} />
+                              <div className={cn('h-full rounded-full', voteMeta[attitude].color)} style={{ width: item ? `${Math.max(18, score)}%` : '100%' }} />
                             </div>
-                            <div className={cn('mt-1 text-xs font-medium', voteMeta[attitude].text)}>{voteMeta[attitude].label}</div>
+                            <div className={cn('mt-1 text-xs font-medium', voteMeta[attitude].text)}>{voteMeta[attitude].label}{item ? ` · ${score}` : ''}</div>
                           </td>
                         )
                       })}
@@ -400,10 +418,10 @@ export function PredictionResultPage() {
                 <div className="mt-3 font-semibold text-slate-950">{moduleTitle(module)}</div>
                 <div className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
                   <div><span className="font-medium text-slate-900">受影响用户：</span>{item.audience_name}</div>
-                  <div><span className="font-medium text-slate-900">用户心理：</span>{userMindset(item)}</div>
-                  <div><span className="font-medium text-slate-900">影响路径：</span>{impactPath(item)}</div>
+                  <div><span className="font-medium text-slate-900">用户心理：</span><ReadableText text={userMindset(item)} /></div>
+                  <div><span className="font-medium text-slate-900">影响路径：</span><ReadableText text={impactPath(item)} /></div>
                   <div><span className="font-medium text-slate-900">关联指标：</span>{metrics.slice(0, 3).join(' / ')}</div>
-                  <div><span className="font-medium text-slate-900">建议动作：</span>{riskAdvice(module, item)}</div>
+                  <div><span className="font-medium text-slate-900">建议动作：</span><ReadableText text={riskAdvice(module, item)} /></div>
                 </div>
               </Card>
             ))}
@@ -429,7 +447,7 @@ export function PredictionResultPage() {
                     <tr key={module.module_key} className="border-t border-slate-100">
                       <td className="px-4 py-3 font-semibold text-slate-900">{metrics[index % metrics.length] ?? '核心指标'}</td>
                       <td className={cn('px-4 py-3 font-medium', direction.className)}>{direction.symbol} {direction.label}</td>
-                      <td className="max-w-xl px-4 py-3 text-slate-600">{item?.risk_reason ?? module.module_summary}</td>
+                      <td className="max-w-xl px-4 py-3 text-slate-600"><ReadableText text={item?.risk_reason ?? module.module_summary} /></td>
                       <td className="px-4 py-3 text-slate-600">{confidenceLabel(score)}</td>
                       <td className="px-4 py-3 text-slate-600">A/B 对照 + 分人群漏斗复盘</td>
                     </tr>
@@ -460,13 +478,8 @@ export function PredictionResultPage() {
           </div>
         </section>
 
-        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4 text-xs text-slate-500">
-          <div>报告用于评审前判断优先级，最终结论建议结合实验和真实用户反馈验证。</div>
-          <div className="flex flex-wrap gap-2">
-            <GhostButton className="px-3 py-1.5 text-xs"><Clipboard className="mr-2 h-3.5 w-3.5" />复制到 PRD</GhostButton>
-            <GhostButton className="px-3 py-1.5 text-xs"><FlaskConical className="mr-2 h-3.5 w-3.5" />生成实验指标</GhostButton>
-            <GhostButton className="px-3 py-1.5 text-xs">标记已采纳<ArrowRight className="ml-2 h-3.5 w-3.5" /></GhostButton>
-          </div>
+        <div className="mt-6 border-t border-slate-200 pt-4 text-xs text-slate-500">
+          报告用于评审前判断优先级，最终结论建议结合实验和真实用户反馈验证。
         </div>
       </div>
     </div>
@@ -562,7 +575,7 @@ export function QuickFeedbackPage() {
     { key: 'yellow', label: '犹豫', count: counts.yellow, className: 'bg-amber-400' },
     { key: 'red', label: '反对', count: counts.red, className: 'bg-rose-500' },
     { key: 'unknown', label: '看不懂', count: counts.unknown, className: 'bg-slate-400' },
-  ]
+  ].map((item) => ({ ...item, percent: Math.round((item.count / totalAttitudes) * 100) }))
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-950/25 p-4 backdrop-blur-sm">
@@ -572,7 +585,6 @@ export function QuickFeedbackPage() {
             <h1 className="text-xl font-semibold text-slate-950">用户陪审团快速反馈</h1>
             <p className="mt-1 text-sm text-slate-500">{result.report_meta.document_title}</p>
           </div>
-          <Badge className={cn('rounded-md px-2.5 py-1', overallGrade.badge)}>风险 {overallGrade.label}</Badge>
         </div>
 
         <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
@@ -597,19 +609,18 @@ export function QuickFeedbackPage() {
 
         <div className="mt-5">
           <div className="mb-2 flex items-center justify-between text-sm">
-            <span className="font-medium text-slate-900">陪审团态度摘要</span>
-            <span className="text-xs text-slate-500">{totalAttitudes} 个判断</span>
+            <span className="font-medium text-slate-900">陪审团态度</span>
           </div>
           <div className="flex h-4 overflow-hidden rounded-full bg-slate-100">
             {attitudeItems.map((item) => (
-              <div key={item.key} className={item.className} style={{ width: `${Math.max(item.count ? 6 : 0, (item.count / totalAttitudes) * 100)}%` }} />
+              <div key={item.key} className={item.className} style={{ width: `${Math.max(item.count ? 6 : 0, item.percent)}%` }} />
             ))}
           </div>
           <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-500">
             {attitudeItems.map((item) => (
               <span key={item.key} className="inline-flex items-center gap-1">
                 <span className={cn('h-2 w-2 rounded-full', item.className)} />
-                {item.label} {item.count}
+                {item.label} {item.percent}%
               </span>
             ))}
           </div>
