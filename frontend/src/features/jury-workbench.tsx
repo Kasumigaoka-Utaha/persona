@@ -5,7 +5,7 @@ import {
   AlertTriangle,
   BarChart3,
   Check,
-  ChevronRight,
+  ChevronDown,
   ChevronUp,
   FileText,
   Link2,
@@ -15,10 +15,10 @@ import {
   RefreshCcw,
   Save,
   Search,
-  Sparkles,
   Trash2,
   Upload,
   Users,
+  TrendingUp,
   X,
 } from 'lucide-react'
 import { api } from '../api'
@@ -42,7 +42,12 @@ type AudienceDetail =
   | { type: 'default'; audience: AudienceDefinition }
   | { type: 'custom'; audience: CustomAudience }
 
-const TAG_GROUPS = [
+type TagGroup = {
+  name: string
+  values: string[]
+}
+
+const TAG_GROUPS: TagGroup[] = [
   { name: '年龄', values: ['18-24 岁', '25-34 岁', '35-44 岁', '45-54 岁', '55 岁以上'] },
   { name: '城市', values: ['一线城市', '新一线城市', '二线城市', '三四线城市', '县城/乡镇'] },
   { name: '月购买次数', values: ['0 次购买', '1-2 次购买', '3-5 次购买', '6-10 次购买', '10 次以上购买'] },
@@ -57,7 +62,25 @@ const TAG_GROUPS = [
   { name: '隐私敏感度', values: ['低隐私敏感', '中隐私敏感', '高隐私敏感', '极高隐私敏感'] },
 ]
 
-const METRICS = ['入口点击率', '发布完成率', '二跳流失率', '互动率', '留存意愿', '信任感']
+const AUDIENCE_TAXONOMY: TagGroup[] = [
+  { name: '八大人群', values: ['小镇青年', '小镇中老年', 'genz', '精致妈妈', '新锐白领', '资深中产', '都市银发', '都市蓝领', '其他'] },
+  { name: '策略人群8分类', values: ['年轻中高消费力男性', '年轻中高消费力女性', '年长中高消费力男性', '年长中高消费力女性', '年轻低消费力男性', '年轻低消费力女性', '年长低消费力男性', '年长低消费力女性'] },
+  { name: '电商用户生命周期', values: ['潜客', '纯新客', '准新客当日复购', '准新客当日未复购', '老客低频复购', '老客低频无复购', '老客中频复购', '老客中频无复购', '老客高频复购', '老客高频无复购', '流失用户重新激活', '流失用户'] },
+  { name: '用户活跃度', values: ['活跃度 1（低）', '活跃度 2（中低）', '活跃度 3（中高）', '活跃度 4（高）'] },
+  { name: '电商用户职业标签', values: ['agriculture', 'blue_collar_industry', 'blue_collar_service', 'building_worker', 'delivery_man', 'driver', 'finance', 'inhouse_student', 'it', 'medical_staff', 'public_servant', 'repair_worker', 'restaurant', 'retail', 'teacher', 'white_collar', 'not_work'] },
+  { name: '写评行为', values: ['写评新用户', '30天未写评老用户', '30天写评1次老用户', '30天写评2次老用户', '30天写评3次老用户', '30天写评4次老用户', '30天写评5次及以上老用户'] },
+  { name: '写评质量', values: ['高订单-低写评用户', '高写评-高有用用户', '高写评-低有用用户'] },
+]
+
+const ALL_TAG_GROUPS = [...TAG_GROUPS, ...AUDIENCE_TAXONOMY]
+
+const METRIC_GROUPS: TagGroup[] = [
+  { name: '核心规模指标', values: ['DAU（日活跃用户数）', 'WAU（周活跃用户数）', 'MAU（月活跃用户数）', 'MAC（月活跃客户数）', 'DAC（日活跃支付用户数）'] },
+  { name: '行为活跃指标', values: ['UV（访客数）', 'PV（浏览量）', '跳出率', '平均页面访问时长', '点击率'] },
+  { name: '留存率', values: ['次日留存率', '7日留存率', '30日留存率', '7日主动复访率'] },
+]
+
+const METRICS = ['入口点击率', '发布完成率', '二跳流失率', '互动率', '留存意愿', '信任感', ...METRIC_GROUPS.flatMap((group) => group.values)]
 const audienceIcons = ['bg-emerald-100 text-emerald-600', 'bg-blue-100 text-blue-600', 'bg-violet-100 text-violet-600', 'bg-orange-100 text-orange-600']
 
 function parseLines(values: string[]) {
@@ -205,7 +228,9 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
   const [juryOpen, setJuryOpen] = useState(variant === 'web')
   const [draftChips, setDraftChips] = useState<string[]>([])
   const [selectedMetrics, setSelectedMetrics] = useState<string[]>(METRICS.slice(0, 4))
+  const [audienceSearch, setAudienceSearch] = useState('')
   const [metricSearch, setMetricSearch] = useState('')
+  const [expandedTagGroups, setExpandedTagGroups] = useState<string[]>(['八大人群', '电商用户生命周期', '年龄'])
   const [editingCustomKey, setEditingCustomKey] = useState<string | null>(null)
   const [detail, setDetail] = useState<AudienceDetail | null>(null)
   const doc = useDocumentState()
@@ -246,11 +271,55 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
     [customAudiences, selectedCustomKeys],
   )
 
+  const visibleAudiences = useMemo(() => {
+    const query = audienceSearch.trim()
+    if (!query) return audienceSource
+    return audienceSource.filter((audience) => `${audience.name} ${audience.definition}`.includes(query))
+  }, [audienceSearch, audienceSource])
+
+  const visibleCustomAudiences = useMemo(() => {
+    const query = audienceSearch.trim()
+    if (!query) return customAudiences
+    return customAudiences.filter((audience) => `${audience.name} ${audience.definition} ${audience.chips.join(' ')}`.includes(query))
+  }, [audienceSearch, customAudiences])
+
   const visibleMetrics = useMemo(() => {
     const query = metricSearch.trim()
     if (!query) return METRICS
     return METRICS.filter((metric) => metric.includes(query))
   }, [metricSearch])
+
+  const visibleAudienceGroups = useMemo(() => {
+    const query = audienceSearch.trim()
+    if (!query) return AUDIENCE_TAXONOMY
+    return AUDIENCE_TAXONOMY
+      .map((group) => {
+        const groupMatch = group.name.includes(query)
+        const values = groupMatch ? group.values : group.values.filter((value) => value.includes(query))
+        return values.length ? { ...group, values } : null
+      })
+      .filter((group): group is TagGroup => Boolean(group))
+  }, [audienceSearch])
+
+  const visibleMetricGroups = useMemo(() => {
+    const query = metricSearch.trim()
+    if (!query) return METRIC_GROUPS
+    return METRIC_GROUPS
+      .map((group) => {
+        const groupMatch = group.name.includes(query)
+        const values = groupMatch ? group.values : group.values.filter((value) => value.includes(query))
+        return values.length ? { ...group, values } : null
+      })
+      .filter((group): group is TagGroup => Boolean(group))
+  }, [metricSearch])
+
+  const parseStatus = doc.parseLinkMutation.isPending || doc.parseFileMutation.isPending
+    ? { label: '正在解析文档', width: '65%', tone: 'bg-blue-500' }
+    : doc.documentNotice.includes('成功')
+      ? { label: '已上传并解析成功', width: '100%', tone: 'bg-emerald-500' }
+      : doc.documentNotice
+        ? { label: '等待补充正文或重新上传', width: '38%', tone: 'bg-amber-400' }
+        : { label: '等待上传或粘贴 PRD 链接', width: '18%', tone: 'bg-slate-300' }
 
   const totalAudienceCount = selectedAudienceKeys.length + selectedCustomKeys.length
   const canRun = doc.effectiveDocumentTitle.trim().length > 0 && doc.effectiveDocumentContent.trim().length >= 20 && totalAudienceCount >= 1 && totalAudienceCount <= 5 && selectedMetrics.length >= 1
@@ -265,7 +334,7 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
           : ''
 
   const runAnalysisMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async ({ target }: { target: 'quick' | 'full' }) => {
       const manualAudiences = selectedCustomAudiences.map((audience) => ({
         name: audience.name,
         definition: audience.definition,
@@ -283,7 +352,7 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
         content_preferences: audience.behavior_summary.content_preferences,
       }))
       const selectedBackendKeys = selectedAudienceKeys.filter((key) => !selectedFallbackAudiences.some((audience) => audience.key === key))
-      return api.runAnalysis({
+      const job = await api.runAnalysis({
         document: {
           title: doc.effectiveDocumentTitle.trim(),
           content: doc.effectiveDocumentContent.trim(),
@@ -294,10 +363,11 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
         manual_audiences: [...fallbackManualAudiences, ...manualAudiences],
         selected_metrics: selectedMetrics,
       })
+      return { job, target }
     },
-    onSuccess: async (job) => {
+    onSuccess: async ({ job, target }) => {
       await safeLogEvent('jury_report_generated', { job_id: job.id, audience_count: totalAudienceCount, metrics: selectedMetrics })
-      navigate(`/analysis/${job.id}`)
+      navigate(target === 'full' ? `/analysis/${job.id}` : `/quick-feedback/${job.id}`)
     },
     onError: async (error) => {
       await safeLogEvent('jury_report_failed', { message: error instanceof Error ? error.message : 'unknown_error' })
@@ -404,36 +474,62 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
     setComposerOpen(true)
   }
 
+  const toggleExpandedTagGroup = (name: string) => {
+    setExpandedTagGroups((current) => current.includes(name) ? current.filter((item) => item !== name) : [...current, name])
+  }
+
+  const addTaxonomyAudience = (label: string) => {
+    const key = `custom_${Date.now()}_${label}`
+    const audience = { key, chips: [label], ...buildManualAudience(label, [label]) }
+    setCustomAudiences((current) => current.some((item) => item.name === label) ? current : [...current, audience])
+    setSelectedCustomKeys((current) => {
+      const existing = customAudiences.find((item) => item.name === label)
+      const targetKey = existing?.key ?? key
+      if (current.includes(targetKey)) return current
+      if (selectedAudienceKeys.length + current.length >= 5) return current
+      return [...current, targetKey]
+    })
+  }
+
   const shellClass = isPopup
-    ? 'min-h-screen bg-slate-200 p-4'
+    ? 'min-h-screen bg-[#eef1f6] p-0'
     : 'relative mx-auto max-w-6xl'
   const panelClass = isPopup
-    ? 'relative min-h-[calc(100vh-2rem)] overflow-hidden rounded-[24px] bg-white shadow-2xl shadow-slate-500/30'
+    ? 'relative min-h-screen overflow-hidden bg-[#f5f7fb]'
     : 'relative mx-auto max-w-6xl'
 
   return (
     <div className={shellClass}>
       <div className={panelClass}>
         <div className={cn('grid gap-6 transition-all duration-300', !isPopup && juryOpen ? 'xl:grid-cols-[minmax(0,1fr)_360px]' : 'xl:grid-cols-1')}>
-          <main className={cn('space-y-5', isPopup && 'min-h-[calc(100vh-2rem)] bg-slate-100')}>
+          <main className={cn('space-y-5', isPopup && 'min-h-screen bg-[#f5f7fb]')}>
             {!isPopup ? (
-            <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-              <div className="absolute inset-y-0 right-0 hidden w-60 bg-gradient-to-l from-blue-100 via-blue-50 to-transparent lg:block" />
-              <div className="relative flex items-start gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/20">
-                  <Users className="h-6 w-6" />
+            <section className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
+              <div className="absolute right-8 top-6 hidden h-28 w-72 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 text-xs text-slate-400 lg:block">
+                <div className="mb-2 h-2 w-24 rounded bg-slate-200" />
+                <div className="space-y-2">
+                  <div className="h-2 rounded bg-slate-200/80" />
+                  <div className="h-2 w-10/12 rounded bg-slate-200/80" />
+                  <div className="h-2 w-8/12 rounded bg-slate-200/80" />
                 </div>
-                <div>
-                  <h1 className="text-3xl font-semibold tracking-tight text-slate-950">用户实时陪审团</h1>
-                  <p className="mt-3 text-base font-medium text-slate-800">帮 PM 在评审前快速发现不同用户视角下的方案风险</p>
-                  <p className="mt-1 text-sm text-slate-500">输出为用户视角风险假设，不替代真实实验或用户调研。</p>
+              </div>
+              <div className="relative max-w-3xl">
+                <Badge className="rounded-md bg-blue-50 text-blue-700">PRD 评审前用户视角校验</Badge>
+                <h1 className="mt-4 text-3xl font-semibold tracking-normal text-slate-950">用户实时陪审团</h1>
+                <p className="mt-3 text-base leading-7 text-slate-600">
+                  上传或粘贴 PRD，选择目标用户标签与观察指标，在评审前快速获得用户视角的风险判断、指标影响和修改优先级。
+                </p>
+                <div className="mt-5 flex flex-wrap gap-3 text-sm text-slate-500">
+                  <span className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5">支持链接 / 文件 / 手动编辑</span>
+                  <span className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5">1-5 类陪审团</span>
+                  <span className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5">快速反馈 + 完整报告</span>
                 </div>
               </div>
             </section>
             ) : (
-              <div className="flex h-14 items-center justify-between border-b border-slate-200 bg-white px-5">
+              <div className="flex h-14 items-center justify-between border-b border-slate-200 bg-white px-5 shadow-sm">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#2f6bff] text-white">
                     <FileText className="h-5 w-5" />
                   </div>
                   <div>
@@ -441,13 +537,17 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                     <div className="text-xs text-slate-500">文件 · 编辑 · 工具 · 插入 · 格式 · 帮助</div>
                   </div>
                 </div>
+                <div className="hidden items-center gap-2 text-xs text-slate-400 md:flex">
+                  <span className="rounded-md bg-slate-100 px-2 py-1">100%</span>
+                  <span className="rounded-md bg-blue-50 px-2 py-1 text-blue-600">分享</span>
+                </div>
               </div>
             )}
 
             {!isPopup ? (
-            <Card className="p-5">
+            <Card className="rounded-2xl p-5">
               <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-5">
+                <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-5">
                   <div className="flex items-center gap-3">
                     <Link2 className="h-5 w-5 text-blue-600" />
                     <div>
@@ -469,7 +569,7 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                   </div>
                 </div>
                 <div
-                  className="rounded-2xl border border-slate-200 bg-white p-5"
+                  className="rounded-xl border border-slate-200 bg-white p-5"
                   onDragOver={(event) => event.preventDefault()}
                   onDrop={(event) => {
                     event.preventDefault()
@@ -500,12 +600,21 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                   {doc.documentNotice}
                 </div>
               ) : null}
+              <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <div className="flex items-center justify-between text-xs font-medium text-slate-500">
+                  <span>{parseStatus.label}</span>
+                  <span>{parseStatus.width}</span>
+                </div>
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-white">
+                  <div className={cn('h-full rounded-full transition-all', parseStatus.tone)} style={{ width: parseStatus.width }} />
+                </div>
+              </div>
             </Card>
             ) : null}
 
-            <Card className={cn('p-5', isPopup && 'mx-auto mt-12 max-w-4xl rounded-none border-0 bg-white p-10 shadow-sm')}>
+            <Card className={cn('p-5', !isPopup && 'rounded-2xl', isPopup && 'mx-auto mt-8 min-h-[calc(100vh-7rem)] w-[min(920px,calc(100vw-104px))] rounded-none border border-slate-100 bg-white px-12 py-10 shadow-[0_8px_30px_rgba(15,23,42,0.06)] max-md:w-[calc(100vw-32px)] max-md:px-6')}>
               <div className={cn('flex flex-wrap items-start justify-between gap-3', isPopup && 'sr-only')}>
-                <SectionTitle title="当前文档上下文" description="Demo 通过 mock host 读取当前文档内容，可直接修改以模拟 PRD 实时变化。" />
+                <SectionTitle title="PRD 内容预览 / 编辑" description="确认本次分析范围，必要时可直接修正文档片段。" />
                 <GhostButton onClick={() => doc.documentQuery.refetch()} disabled={doc.documentQuery.isFetching}>
                   <RefreshCcw className={cn('mr-2 h-4 w-4', doc.documentQuery.isFetching && 'animate-spin')} />刷新文档
                 </GhostButton>
@@ -513,7 +622,7 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
               <div className="mt-5 grid gap-4">
                 <div>
                   <Label>{isPopup ? '标题' : '文档标题'}</Label>
-                  <Input value={doc.effectiveDocumentTitle} onChange={(event) => doc.setDocumentTitle(event.target.value)} placeholder="当前 PRD 标题" className={cn(isPopup && 'border-0 px-0 text-4xl font-semibold tracking-tight focus:border-0')} />
+                  <Input value={doc.effectiveDocumentTitle} onChange={(event) => doc.setDocumentTitle(event.target.value)} placeholder="当前 PRD 标题" className={cn(isPopup && 'border-0 px-0 text-4xl font-semibold tracking-normal focus:border-0 max-md:text-3xl')} />
                 </div>
                 <div>
                   <Label>{isPopup ? '正文' : '文档内容'}</Label>
@@ -524,12 +633,13 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
 
             {variant === 'web' ? (
               <>
-                <Card className="p-5">
+                <Card className="rounded-2xl p-5">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <SectionTitle title="选择用户陪审团" description="从预设人群标签中选择，快速匹配多元视角" />
-                    <button type="button" onClick={openPicker} className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm hover:border-blue-200 hover:text-blue-600" aria-label="展开用户陪审团选择">
-                      <ChevronRight className="h-5 w-5" />
-                    </button>
+                    <SectionTitle title="选择用户陪审团" description="先选常用人群，也可以按分类标准或具体标签搜索。" />
+                    <GhostButton onClick={openComposer} className="shrink-0 border-blue-100 bg-blue-50 text-blue-700 hover:bg-blue-100">
+                      <Plus className="mr-2 h-4 w-4" />
+                      创建自定义标签组合
+                    </GhostButton>
                   </div>
                   <div className="mt-5 grid gap-3 md:grid-cols-4">
                     {audienceSource.slice(0, 4).map((audience, index) => {
@@ -540,8 +650,8 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                           type="button"
                           onClick={() => void toggleAudience(audience.key)}
                           className={cn(
-                            'flex min-h-16 items-center gap-3 rounded-2xl border p-4 text-left transition',
-                            active ? 'border-blue-500 bg-blue-50 shadow-sm' : 'border-slate-200 bg-white hover:border-blue-200',
+                            'flex min-h-16 items-center gap-3 rounded-xl border p-4 text-left transition',
+                            active ? 'border-blue-500 bg-blue-50 shadow-sm' : 'border-slate-200 bg-slate-50/70 hover:border-blue-200 hover:bg-white',
                           )}
                         >
                           <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-xl', audienceIcons[index % audienceIcons.length])}>
@@ -558,61 +668,122 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                       )
                     })}
                   </div>
-                  <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-3">
-                    <div className="flex flex-col gap-3 md:flex-row md:items-center">
-                      <div className="min-w-0 flex-1">
-                        <div className="font-medium text-slate-900">自定义标签组合 <span className="text-sm font-normal text-slate-400">（选填）</span></div>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {selectedCustomAudiences.map((audience) => (
-                            <Badge key={audience.key} className="bg-violet-100 text-violet-700">{audience.name}</Badge>
-                          ))}
-                          {!selectedCustomAudiences.length ? <span className="text-sm text-slate-400">添加你的自定义标签，按回车确认</span> : null}
+                  <div className="mt-5 flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2">
+                    <Search className="h-4 w-4 text-slate-400" />
+                    <input
+                      value={audienceSearch}
+                      onChange={(event) => setAudienceSearch(event.target.value)}
+                      className="min-w-0 flex-1 border-0 bg-transparent text-sm outline-none placeholder:text-slate-400"
+                      placeholder="搜索分类标准或用户标签，例如：八大人群 / 小镇青年 / 写评新用户"
+                    />
+                    {audienceSearch ? (
+                      <button type="button" onClick={() => setAudienceSearch('')} className="text-slate-400 hover:text-slate-700">
+                        <X className="h-4 w-4" />
+                      </button>
+                    ) : null}
+                  </div>
+                  <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                    {visibleAudienceGroups.map((group) => (
+                      <div key={group.name} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                        <div className="mb-2 flex items-center justify-between">
+                          <div className="text-sm font-semibold text-slate-800">{group.name}</div>
+                          <div className="text-xs text-slate-400">{group.values.length} 个标签</div>
+                        </div>
+                        <div className="flex max-h-24 flex-wrap gap-2 overflow-y-auto">
+                          {group.values.map((label) => {
+                            const active = selectedCustomAudiences.some((audience) => audience.name === label)
+                            return (
+                              <button
+                                key={label}
+                                type="button"
+                                onClick={() => addTaxonomyAudience(label)}
+                                className={cn('rounded-full px-3 py-1.5 text-xs font-medium transition', active ? 'bg-slate-900 text-white' : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:ring-blue-200')}
+                              >
+                                {label}
+                              </button>
+                            )
+                          })}
                         </div>
                       </div>
-                      <GhostButton onClick={openComposer} className="shrink-0 border-blue-100 bg-blue-50 text-blue-700 hover:bg-blue-100">
-                        <Plus className="mr-2 h-4 w-4" />
-                        创建自定义标签组合
-                      </GhostButton>
+                    ))}
+                  </div>
+                  <div className="mt-5 rounded-xl border border-slate-200 bg-white p-3">
+                    <div className="text-sm font-medium text-slate-900">已选标签</div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {selectedAudiences.map((audience) => <Badge key={audience.key}>{audience.name}</Badge>)}
+                      {selectedCustomAudiences.map((audience) => <Badge key={audience.key} className="bg-violet-100 text-violet-700">{audience.name}</Badge>)}
+                      {!selectedAudiences.length && !selectedCustomAudiences.length ? <span className="text-sm text-slate-400">请选择 1-5 个用户标签。</span> : null}
                     </div>
                   </div>
                 </Card>
 
-                <Card className="p-5">
-                  <SectionTitle title="选择观察指标" description="搜索或选择你希望重点关注的指标" />
-                  <div className="mt-4 flex items-center gap-2 rounded-xl border border-blue-300 bg-white px-3 py-2 shadow-sm shadow-blue-100">
-                    <Search className="h-4 w-4 text-slate-400" />
-                    <input value={metricSearch} onChange={(event) => setMetricSearch(event.target.value)} className="min-w-0 flex-1 border-0 bg-transparent text-sm outline-none placeholder:text-slate-400" placeholder="搜索观察指标，例如：入口点击率" />
+                <Card className="rounded-2xl p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <SectionTitle title="选择观察指标" description="选择本次报告关注的规模、活跃、留存指标。" />
+                    <GhostButton className="shrink-0 border-slate-200 text-slate-600">
+                      <Upload className="mr-2 h-4 w-4" />
+                      导入自定义指标组合
+                    </GhostButton>
                   </div>
-                  <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                    <div className="text-sm font-medium text-slate-900">当前已选观察指标</div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {selectedMetrics.map((metric) => (
-                        <button
-                          key={metric}
-                          type="button"
-                          onClick={() => toggleMetric(metric)}
-                          className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-200"
-                        >
-                          {metric}
-                          <X className="h-3 w-3" />
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {visibleMetrics.map((metric) => {
+                  <div className="mt-5 grid gap-3 md:grid-cols-4">
+                    {METRICS.slice(0, 4).map((metric) => {
                       const active = selectedMetrics.includes(metric)
                       return (
                         <button
                           key={metric}
                           type="button"
                           onClick={() => toggleMetric(metric)}
-                          className={cn('rounded-full border px-3 py-1.5 text-xs font-medium transition', active ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-blue-300')}
+                          className={cn('rounded-xl border p-4 text-left transition', active ? 'border-blue-500 bg-blue-50' : 'border-slate-200 bg-slate-50/70 hover:border-blue-200 hover:bg-white')}
                         >
-                          {metric}
+                          <TrendingUp className="mb-3 h-5 w-5 text-blue-600" />
+                          <div className="font-medium text-slate-900">{metric}</div>
+                          <div className="mt-1 text-xs text-slate-500">常用观察指标</div>
                         </button>
                       )
                     })}
+                  </div>
+                  <div className="mt-4 flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2">
+                    <Search className="h-4 w-4 text-slate-400" />
+                    <input value={metricSearch} onChange={(event) => setMetricSearch(event.target.value)} className="min-w-0 flex-1 border-0 bg-transparent text-sm outline-none placeholder:text-slate-400" placeholder="搜索观察指标，例如：入口点击率" />
+                    {metricSearch ? (
+                      <button type="button" onClick={() => setMetricSearch('')} className="text-slate-400 hover:text-slate-700">
+                        <X className="h-4 w-4" />
+                      </button>
+                    ) : null}
+                  </div>
+                  <div className="mt-4 grid gap-3 lg:grid-cols-3">
+                    {visibleMetricGroups.map((group) => (
+                      <div key={group.name} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                        <div className="mb-2 text-sm font-semibold text-slate-800">{group.name}</div>
+                        <div className="flex flex-wrap gap-2">
+                          {group.values.map((metric) => {
+                            const active = selectedMetrics.includes(metric)
+                            return (
+                              <button
+                                key={metric}
+                                type="button"
+                                onClick={() => toggleMetric(metric)}
+                                className={cn('rounded-full px-3 py-1.5 text-xs font-medium transition', active ? 'bg-slate-900 text-white' : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:ring-blue-200')}
+                              >
+                                {metric}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3">
+                    <div className="text-sm font-medium text-slate-900">已选观察指标</div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {selectedMetrics.map((metric) => (
+                        <button key={metric} type="button" onClick={() => toggleMetric(metric)} className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100">
+                          {metric}
+                          <X className="h-3 w-3" />
+                        </button>
+                      ))}
+                      {!selectedMetrics.length ? <span className="text-sm text-slate-400">请选择至少 1 个观察指标。</span> : null}
+                    </div>
                   </div>
                 </Card>
               </>
@@ -625,13 +796,13 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                   已选择 {totalAudienceCount} 类陪审团，{selectedMetrics.length} 个观察指标，预计 30 秒生成快速反馈。
                 </div>
                 <div className="flex flex-wrap gap-3">
-                  <Button className="bg-blue-600 shadow-lg shadow-blue-600/20 hover:bg-blue-700" disabled={!canRun || runAnalysisMutation.isPending} onClick={() => runAnalysisMutation.mutate()} title={!canRun ? disabledReason : '生成快速反馈'}>
-                    {runAnalysisMutation.isPending ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                    生成快速反馈
-                  </Button>
-                  <GhostButton disabled={!canRun || runAnalysisMutation.isPending} onClick={() => runAnalysisMutation.mutate()}>
-                    <BarChart3 className="mr-2 h-4 w-4" />
+                  <Button className="bg-blue-600 shadow-lg shadow-blue-600/20 hover:bg-blue-700" disabled={!canRun || runAnalysisMutation.isPending} onClick={() => runAnalysisMutation.mutate({ target: 'full' })} title={!canRun ? disabledReason : '进入完整分析'}>
+                    {runAnalysisMutation.isPending ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <BarChart3 className="mr-2 h-4 w-4" />}
                     进入完整分析
+                  </Button>
+                  <GhostButton disabled={!canRun || runAnalysisMutation.isPending} onClick={() => runAnalysisMutation.mutate({ target: 'quick' })}>
+                    <BarChart3 className="mr-2 h-4 w-4" />
+                    生成快速反馈
                   </GhostButton>
                 </div>
               </div>
@@ -642,27 +813,27 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
               <button
                 type="button"
                 onClick={openPicker}
-                className="fixed right-24 top-[42%] z-20 flex items-center gap-3 rounded-2xl bg-white px-6 py-4 text-left shadow-2xl shadow-slate-900/20 ring-1 ring-slate-200 hover:ring-blue-200"
+                className="fixed right-6 top-1/2 z-20 flex -translate-y-1/2 items-center gap-3 rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 text-left shadow-xl shadow-slate-900/12 backdrop-blur hover:border-blue-200 max-md:right-3 max-md:h-12 max-md:w-12 max-md:justify-center max-md:rounded-full max-md:px-0 max-md:py-0"
               >
-                <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-                  <Users className="h-7 w-7" />
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 max-md:h-8 max-md:w-8">
+                  <Users className="h-5 w-5" />
                 </span>
-                <span>
-                  <span className="block text-lg font-semibold text-slate-900">用户陪审团</span>
+                <span className="max-md:hidden">
+                  <span className="block text-sm font-semibold text-slate-900">用户陪审团</span>
                   <span className="mt-1 block text-sm text-slate-500">选择用户标签与观察指标</span>
                 </span>
               </button>
             ) : null}
           </main>
 
-          {juryOpen ? (
-            <aside className={isPopup ? 'fixed inset-0 z-40 bg-slate-900/45 p-4' : 'fixed inset-y-0 right-0 z-30 w-full max-w-md overflow-y-auto border-l border-slate-200 bg-white p-6 shadow-2xl shadow-slate-900/15 xl:sticky xl:top-8 xl:max-h-[calc(100vh-4rem)] xl:w-auto xl:rounded-3xl xl:border xl:shadow-sm'}>
-              <div className={isPopup ? 'mx-auto mt-8 flex max-h-[calc(100vh-4rem)] max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-2xl shadow-slate-950/40' : ''}>
-                <div className={cn(isPopup && 'bg-blue-600 px-6 py-4 text-white')}>
+          {juryOpen && (isPopup || !composerOpen) ? (
+            <aside className={isPopup ? 'fixed inset-0 z-40 flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-[2px]' : 'fixed inset-y-0 right-0 z-30 w-full max-w-md overflow-y-auto border-l border-slate-200 bg-white p-6 shadow-2xl shadow-slate-900/15 xl:sticky xl:top-8 xl:max-h-[calc(100vh-4rem)] xl:w-auto xl:rounded-3xl xl:border xl:shadow-sm'}>
+              <div className={isPopup ? 'flex max-h-[min(760px,calc(100vh-2rem))] w-full max-w-[520px] flex-col overflow-hidden rounded-lg bg-white shadow-2xl shadow-slate-950/25' : ''}>
+                <div className={cn(isPopup && 'bg-[#4f6df5] px-4 py-3 text-white')}>
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <h2 className={cn('text-lg font-semibold', isPopup ? 'text-white' : 'text-slate-900')}>{composerOpen ? '自定义标签组合' : '用户陪审团'}</h2>
-                    <p className={cn('mt-1 text-sm', isPopup ? 'text-blue-100' : 'text-slate-500')}>{composerOpen ? '按需组合标签，精准定义你的陪审团' : '选择 1-5 个目标用户群参与分析'}</p>
+                    <h2 className={cn('text-lg font-semibold', isPopup ? 'text-white' : 'text-slate-900')}>{composerOpen ? '创建自定义用户标签' : '用户陪审团'}</h2>
+                    {!isPopup ? <p className="mt-1 text-sm text-slate-500">{composerOpen ? '按需组合标签，精准定义你的陪审团' : '选择 1-5 个目标用户群参与分析'}</p> : null}
                   </div>
                   <button type="button" onClick={() => setJuryOpen(false)} className={cn('rounded-xl p-2', isPopup ? 'text-white/80 hover:bg-white/10 hover:text-white' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700')}>
                     <X className="h-5 w-5" />
@@ -670,15 +841,15 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                 </div>
                 </div>
 
-                <div className={cn(isPopup && 'overflow-y-auto px-6 pb-5')}>
-                <Card className="mt-5 border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 shadow-none">
+                <div className={cn(isPopup && 'overflow-y-auto px-4 pb-4')}>
+                {!isPopup ? <Card className="mt-5 border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 shadow-none">
                   <div className="flex gap-3">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                     <div>只做判断，不给优化建议；风险指数是 0-100 的方向性估算。</div>
                   </div>
-                </Card>
+                </Card> : null}
 
-                <div className="mt-5 flex rounded-xl bg-slate-100 p-1 text-sm font-medium">
+                <div className={cn('mt-5 flex rounded-xl bg-slate-100 p-1 text-sm font-medium', isPopup && 'hidden')}>
                   <button type="button" onClick={() => setComposerOpen(false)} className={cn('flex-1 rounded-lg px-3 py-2', !composerOpen ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500')}>
                     用户群
                   </button>
@@ -688,11 +859,49 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                 </div>
 
                 {!composerOpen ? (
-                  <div className="mt-5 space-y-3">
-                    {audienceSource.map((audience) => {
+                  <div className={cn('mt-5', isPopup ? 'space-y-5' : 'space-y-3')}>
+                    <div>
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <div className="text-sm font-semibold text-slate-900">用户标签选择</div>
+                        <button type="button" onClick={openComposer} className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700">
+                          <Plus className="h-3.5 w-3.5" />
+                          创建自定义用户标签
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-2 rounded-lg border border-blue-300 bg-white px-3 py-2 shadow-sm shadow-blue-100">
+                        <Search className="h-4 w-4 text-slate-400" />
+                        <input
+                          value={audienceSearch}
+                          onChange={(event) => setAudienceSearch(event.target.value)}
+                          className="min-w-0 flex-1 border-0 bg-transparent text-sm outline-none placeholder:text-slate-400"
+                          placeholder="搜索或选择用户标签..."
+                        />
+                        {audienceSearch ? (
+                          <button type="button" onClick={() => setAudienceSearch('')} className="text-slate-400 hover:text-slate-700">
+                            <X className="h-4 w-4" />
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className={cn(isPopup ? 'flex max-h-32 flex-wrap gap-2 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-3' : 'space-y-3')}>
+                    {visibleAudiences.map((audience) => {
                       const active = selectedAudienceKeys.includes(audience.key)
                       const atLimit = !active && totalAudienceCount >= 5
-                      return (
+                      return isPopup ? (
+                        <button
+                          key={audience.key}
+                          type="button"
+                          disabled={atLimit}
+                          onClick={() => void toggleAudience(audience.key)}
+                          className={cn(
+                            'rounded-full px-3 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed',
+                            active ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-700 hover:bg-slate-300',
+                            atLimit && 'opacity-50',
+                          )}
+                        >
+                          {audience.name}
+                        </button>
+                      ) : (
                         <div key={audience.key} className={cn('rounded-2xl border p-4 transition', active ? 'border-blue-500 bg-blue-50' : 'border-slate-200 bg-white', atLimit && 'opacity-60')}>
                           <div className="flex items-start gap-3">
                             <button type="button" disabled={atLimit} onClick={() => void toggleAudience(audience.key)} className="min-w-0 flex-1 text-left disabled:cursor-not-allowed">
@@ -710,10 +919,24 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                       )
                     })}
 
-                    {customAudiences.map((audience) => {
+                    {visibleCustomAudiences.map((audience) => {
                       const active = selectedCustomKeys.includes(audience.key)
                       const atLimit = !active && totalAudienceCount >= 5
-                      return (
+                      return isPopup ? (
+                        <button
+                          key={audience.key}
+                          type="button"
+                          disabled={atLimit}
+                          onClick={() => void toggleCustomAudience(audience.key)}
+                          className={cn(
+                            'rounded-full px-3 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed',
+                            active ? 'bg-violet-700 text-white' : 'bg-violet-100 text-violet-700 hover:bg-violet-200',
+                            atLimit && 'opacity-50',
+                          )}
+                        >
+                          {audience.name}
+                        </button>
+                      ) : (
                         <div key={audience.key} className={cn('rounded-2xl border p-4 transition', active ? 'border-violet-500 bg-violet-50' : 'border-violet-100 bg-white', atLimit && 'opacity-60')}>
                           <div className="flex items-start gap-3">
                             <button type="button" disabled={atLimit} onClick={() => void toggleCustomAudience(audience.key)} className="min-w-0 flex-1 text-left disabled:cursor-not-allowed">
@@ -730,16 +953,19 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                         </div>
                       )
                     })}
+                    </div>
                   </div>
                 ) : (
                   <div className="mt-5 space-y-5">
-                    {TAG_GROUPS.map((group) => (
+                    {ALL_TAG_GROUPS.map((group) => {
+                      const expanded = isPopup || expandedTagGroups.includes(group.name)
+                      return (
                       <div key={group.name} className="border-b border-slate-100 pb-4">
-                        <div className="mb-3 flex items-center justify-between">
+                        <button type="button" onClick={() => toggleExpandedTagGroup(group.name)} className="mb-3 flex w-full items-center justify-between text-left">
                           <div className="text-sm font-semibold text-slate-700">{group.name}</div>
-                          <ChevronUp className="h-4 w-4 text-slate-400" />
-                        </div>
-                        <div className="flex flex-wrap gap-2">
+                          {expanded ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
+                        </button>
+                        {expanded ? <div className="flex flex-wrap gap-2">
                           {group.values.map((chip) => {
                             const active = draftChips.includes(chip)
                             return (
@@ -756,10 +982,10 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                               </button>
                             )
                           })}
-                        </div>
+                        </div> : null}
                       </div>
-                    ))}
-                    <div className="sticky bottom-0 -mx-6 border-t border-slate-200 bg-white px-6 py-4">
+                    )})}
+                    <div className={cn('sticky bottom-0 border-t border-slate-200 bg-white py-4', isPopup ? '-mx-4 px-4' : '-mx-6 px-6')}>
                       <div className="text-sm text-slate-600">条件：{draftChips.length ? draftChips.join(' & ') : '请选择标签'}</div>
                       <div className="mt-3 flex justify-end gap-2">
                         <GhostButton onClick={() => { setEditingCustomKey(null); setDraftChips([]); setComposerOpen(false) }}>
@@ -774,7 +1000,7 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                   </div>
                 )}
 
-                <Card className="mt-5 bg-slate-50 p-4 shadow-none">
+                <Card className={cn('mt-5 bg-slate-50 p-4 shadow-none', isPopup && 'rounded-lg border-slate-200 bg-white p-3')}>
                   <div className="text-sm font-medium text-slate-900">当前已选用户群</div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {selectedAudiences.map((audience) => <Badge key={audience.key}>{audience.name}</Badge>)}
@@ -784,9 +1010,9 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                   <div className="mt-4 text-xs leading-5 text-slate-500">{totalAudienceCount}/5 个用户群</div>
                 </Card>
 
-                <Card className="mt-5 bg-slate-50 p-4 shadow-none">
+                <Card className={cn('mt-5 bg-slate-50 p-4 shadow-none', isPopup && 'rounded-lg border-0 bg-white p-0')}>
                   <div className="text-sm font-medium text-slate-900">观察指标选择</div>
-                  <div className="mt-3 flex items-center gap-2 rounded-xl border border-blue-300 bg-white px-3 py-2 shadow-sm shadow-blue-100">
+                  <div className="mt-3 flex items-center gap-2 rounded-lg border border-blue-300 bg-white px-3 py-2 shadow-sm shadow-blue-100">
                     <Search className="h-4 w-4 text-slate-400" />
                     <input
                       value={metricSearch}
@@ -800,7 +1026,7 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                       </button>
                     ) : null}
                   </div>
-                  <div className="mt-3 flex max-h-28 flex-wrap gap-2 overflow-y-auto rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="mt-3 flex max-h-28 flex-wrap gap-2 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-3">
                     {visibleMetrics.map((metric) => {
                       const active = selectedMetrics.includes(metric)
                       return (
@@ -810,7 +1036,7 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                           onClick={() => toggleMetric(metric)}
                           className={cn(
                             'rounded-full px-3 py-1.5 text-xs font-medium transition',
-                            active ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200',
+                            active ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-700 hover:bg-slate-300',
                           )}
                         >
                           {metric}
@@ -824,7 +1050,7 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                         key={metric}
                         type="button"
                         onClick={() => toggleMetric(metric)}
-                        className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-200"
+                        className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
                       >
                         {metric}
                         <X className="h-3 w-3" />
@@ -834,7 +1060,7 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                   </div>
                 </Card>
 
-                {detail ? (
+                {detail && !isPopup ? (
                   <Card className="mt-4 p-4 shadow-none">
                     <div className="flex items-start justify-between gap-3">
                       <SectionTitle title={detail.audience.name} description={detail.type === 'default' ? '系统默认人格标签' : '自定义组合标签'} />
@@ -868,15 +1094,15 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                 ) : null}
               </div>
               {isPopup ? (
-                <div className="border-t border-slate-200 bg-white px-6 py-4">
+                <div className="border-t border-slate-200 bg-white px-4 py-3">
                   <div className="mb-3 text-xs text-slate-500">
                     已选择 {totalAudienceCount} 类陪审团，{selectedMetrics.length} 个观察指标。
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <GhostButton disabled={!canRun || runAnalysisMutation.isPending} onClick={() => runAnalysisMutation.mutate()} className="border-0 px-0 text-blue-700 hover:bg-transparent">
+                    <GhostButton disabled={!canRun || runAnalysisMutation.isPending} onClick={() => runAnalysisMutation.mutate({ target: 'full' })} className="border-0 px-0 text-blue-700 hover:bg-transparent">
                       进入完整分析
                     </GhostButton>
-                    <Button className="bg-blue-600 px-6 hover:bg-blue-700" disabled={!canRun || runAnalysisMutation.isPending} onClick={() => runAnalysisMutation.mutate()} title={!canRun ? disabledReason : '生成快速反馈'}>
+                    <Button className="bg-blue-600 px-6 hover:bg-blue-700" disabled={!canRun || runAnalysisMutation.isPending} onClick={() => runAnalysisMutation.mutate({ target: 'quick' })} title={!canRun ? disabledReason : '生成快速反馈'}>
                       {runAnalysisMutation.isPending ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
                       生成快速反馈
                     </Button>
@@ -886,6 +1112,65 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
               ) : null}
               </div>
             </aside>
+          ) : null}
+          {composerOpen && !isPopup ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/30 p-4 backdrop-blur-sm">
+              <div className="flex max-h-[calc(100vh-3rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl shadow-slate-950/25">
+                <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-4">
+                  <div>
+                    <h2 className="text-lg font-semibold text-slate-950">创建自定义标签组合</h2>
+                    <p className="mt-1 text-sm text-slate-500">按属性组合用户标签，系统会生成本次分析使用的临时用户群。</p>
+                  </div>
+                  <button type="button" onClick={() => { setEditingCustomKey(null); setDraftChips([]); setComposerOpen(false) }} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                <div className="overflow-y-auto px-6 py-5">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {ALL_TAG_GROUPS.map((group) => {
+                      const expanded = expandedTagGroups.includes(group.name)
+                      return (
+                        <div key={group.name} className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                          <button type="button" onClick={() => toggleExpandedTagGroup(group.name)} className="flex w-full items-center justify-between text-left">
+                            <span className="text-sm font-semibold text-slate-800">{group.name}</span>
+                            {expanded ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
+                          </button>
+                          {expanded ? (
+                            <div className="mt-3 flex max-h-32 flex-wrap gap-2 overflow-y-auto">
+                              {group.values.map((chip) => {
+                                const active = draftChips.includes(chip)
+                                return (
+                                  <button
+                                    key={chip}
+                                    type="button"
+                                    onClick={() => toggleDraftChip(chip)}
+                                    className={cn('rounded-full px-3 py-1.5 text-xs font-medium transition', active ? 'bg-slate-900 text-white' : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:ring-blue-200')}
+                                  >
+                                    {chip}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          ) : null}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+                <div className="border-t border-slate-200 bg-white px-6 py-4">
+                  <div className="text-sm text-slate-600">已选条件：{draftChips.length ? draftChips.join(' / ') : '请选择至少 1 个标签'}</div>
+                  <div className="mt-3 flex justify-end gap-2">
+                    <GhostButton onClick={() => { setEditingCustomKey(null); setDraftChips([]); setComposerOpen(false) }}>
+                      取消
+                    </GhostButton>
+                    <Button disabled={!draftChips.length} onClick={() => void completeCustomAudience()}>
+                      <Save className="mr-2 h-4 w-4" />
+                      保存并应用
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
           ) : null}
         </div>
       </div>
