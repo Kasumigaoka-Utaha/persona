@@ -23,6 +23,8 @@ export const api = {
     request<AnalysisJob>('/analysis/run', { method: 'POST', body: JSON.stringify(payload) }),
   rerunAnalysis: (jobId: number, payload: { model_reasoning_effort: ModelReasoningEffort }) =>
     request<AnalysisJob>(`/analysis/${jobId}/rerun`, { method: 'POST', body: JSON.stringify(payload) }),
+  generateModificationSuggestions: (jobId: number) =>
+    request<AnalysisJob>(`/analysis/${jobId}/modification-suggestions`, { method: 'POST' }),
   getAnalysis: (jobId: number) => request<AnalysisJob>(`/analysis/${jobId}`),
   exportMarkdown: (jobId: number) => request<{ markdown: string }>(`/reports/${jobId}/markdown`),
   logEvent: (payload: { event_name: string; payload?: Record<string, unknown> }) =>

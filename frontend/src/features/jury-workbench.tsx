@@ -225,7 +225,7 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
   const [selectedCustomKeys, setSelectedCustomKeys] = useState<string[]>([])
   const [customAudiences, setCustomAudiences] = useState<CustomAudience[]>([])
   const [composerOpen, setComposerOpen] = useState(false)
-  const [juryOpen, setJuryOpen] = useState(variant === 'web')
+  const [juryOpen, setJuryOpen] = useState(false)
   const [draftChips, setDraftChips] = useState<string[]>([])
   const [selectedMetrics, setSelectedMetrics] = useState<string[]>(METRICS.slice(0, 4))
   const [audienceSearch, setAudienceSearch] = useState('')
@@ -504,48 +504,34 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
       <div className={panelClass}>
         <div className={cn('grid gap-6 transition-all duration-300', !isPopup && juryOpen ? 'xl:grid-cols-[minmax(0,1fr)_360px]' : 'xl:grid-cols-1')}>
           <main className={cn('space-y-5', isPopup && 'min-h-screen bg-[#f5f7fb]')}>
-            {!isPopup ? (
-            <section className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
-              <div className="absolute right-8 top-6 hidden h-28 w-72 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 text-xs text-slate-400 lg:block">
-                <div className="mb-2 h-2 w-24 rounded bg-slate-200" />
-                <div className="space-y-2">
-                  <div className="h-2 rounded bg-slate-200/80" />
-                  <div className="h-2 w-10/12 rounded bg-slate-200/80" />
-                  <div className="h-2 w-8/12 rounded bg-slate-200/80" />
-                </div>
-              </div>
-              <div className="relative max-w-3xl">
-                <Badge className="rounded-md bg-blue-50 text-blue-700">PRD 评审前用户视角校验</Badge>
-                <h1 className="mt-4 text-3xl font-semibold tracking-normal text-slate-950">用户实时陪审团</h1>
-                <p className="mt-3 text-base leading-7 text-slate-600">
-                  上传或粘贴 PRD，选择目标用户标签与观察指标，在评审前快速获得用户视角的风险判断、指标影响和修改优先级。
-                </p>
-                <div className="mt-5 flex flex-wrap gap-3 text-sm text-slate-500">
-                  <span className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5">支持链接 / 文件 / 手动编辑</span>
-                  <span className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5">1-5 类陪审团</span>
-                  <span className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5">快速反馈 + 完整报告</span>
-                </div>
-              </div>
-            </section>
-            ) : (
-              <div className="flex h-14 items-center justify-between border-b border-slate-200 bg-white px-5 shadow-sm">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#2f6bff] text-white">
-                    <FileText className="h-5 w-5" />
+            {isPopup ? (
+              <>
+                <div className="flex h-14 items-center justify-between border-b border-slate-200 bg-white px-5 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#2f6bff] text-white">
+                      <FileText className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-slate-900">{doc.effectiveDocumentTitle || '召集用户陪审团 doc'}</div>
+                      <div className="text-xs text-slate-500">文档 · 最近编辑于 10:24 · 已保存</div>
+                    </div>
                   </div>
-                  <div>
-                    <div className="text-sm font-semibold text-slate-900">{doc.effectiveDocumentTitle || '召集用户陪审团 doc'}</div>
-                    <div className="text-xs text-slate-500">文件 · 编辑 · 工具 · 插入 · 格式 · 帮助</div>
+                  <div className="hidden items-center gap-2 text-xs text-slate-500 md:flex">
+                    {['文件', '编辑', '插入', '格式', '工具'].map((item) => <span key={item} className="px-1">{item}</span>)}
+                    <span className="ml-2 rounded-md bg-slate-100 px-2 py-1">100%</span>
+                    <span className="rounded-md bg-blue-600 px-3 py-1 text-white">分享</span>
                   </div>
                 </div>
-                <div className="hidden items-center gap-2 text-xs text-slate-400 md:flex">
-                  <span className="rounded-md bg-slate-100 px-2 py-1">100%</span>
-                  <span className="rounded-md bg-blue-50 px-2 py-1 text-blue-600">分享</span>
+                <div className="flex h-10 items-center gap-2 border-b border-slate-200 bg-white px-20 text-xs text-slate-500 max-md:hidden">
+                  {['正文', '14', 'B', 'I', '链接', '评论', '对齐', '项目符号'].map((item) => <span key={item} className="rounded px-2 py-1 hover:bg-slate-100">{item}</span>)}
                 </div>
-              </div>
-            )}
+                <div className="fixed left-0 top-14 z-10 hidden h-[calc(100vh-3.5rem)] w-14 flex-col items-center gap-3 border-r border-slate-200 bg-white py-4 text-slate-400 md:flex">
+                  {['D', 'C', 'T', 'M'].map((item) => <span key={item} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-slate-100">{item}</span>)}
+                </div>
+              </>
+            ) : null}
 
-            {!isPopup ? (
+            {false && !isPopup ? (
             <Card className="rounded-2xl p-5">
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-5">
@@ -613,7 +599,7 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
             </Card>
             ) : null}
 
-            <Card className={cn('p-5', !isPopup && 'rounded-2xl', isPopup && 'mx-auto mt-8 min-h-[calc(100vh-7rem)] w-[min(920px,calc(100vw-104px))] rounded-none border border-slate-100 bg-white px-12 py-10 shadow-[0_8px_30px_rgba(15,23,42,0.06)] max-md:w-[calc(100vw-32px)] max-md:px-6')}>
+            <Card className={cn('p-5', !isPopup && 'hidden rounded-2xl', isPopup && 'mx-auto mt-8 min-h-[calc(100vh-9.5rem)] w-[min(900px,calc(100vw-128px))] rounded-sm border border-slate-100 bg-white px-16 py-12 shadow-[0_10px_36px_rgba(15,23,42,0.08)] max-md:w-[calc(100vw-32px)] max-md:px-6')}>
               <div className={cn('flex flex-wrap items-start justify-between gap-3', isPopup && 'sr-only')}>
                 <SectionTitle title="PRD 内容预览 / 编辑" description="确认本次分析范围，必要时可直接修正文档片段。" />
                 <GhostButton onClick={() => doc.documentQuery.refetch()} disabled={doc.documentQuery.isFetching}>
@@ -637,9 +623,9 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                 <Card className="rounded-2xl p-5">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <SectionTitle title="选择用户陪审团" description="先选常用人群，也可以按分类标准或具体标签搜索。" />
-                    <GhostButton onClick={openComposer} className="shrink-0 border-blue-100 bg-blue-50 text-blue-700 hover:bg-blue-100">
-                      <Plus className="mr-2 h-4 w-4" />
-                      创建自定义标签组合
+                    <GhostButton onClick={openPicker} className="shrink-0 border-blue-100 bg-blue-50 text-blue-700 hover:bg-blue-100">
+                      <Users className="mr-2 h-4 w-4" />
+                      打开标签扩展栏
                     </GhostButton>
                   </div>
                   <div className="mt-5 grid gap-3 md:grid-cols-4">
@@ -682,31 +668,6 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                         <X className="h-4 w-4" />
                       </button>
                     ) : null}
-                  </div>
-                  <div className="mt-4 grid gap-3 lg:grid-cols-2">
-                    {visibleAudienceGroups.map((group) => (
-                      <div key={group.name} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-                        <div className="mb-2 flex items-center justify-between">
-                          <div className="text-sm font-semibold text-slate-800">{group.name}</div>
-                          <div className="text-xs text-slate-400">{group.values.length} 个标签</div>
-                        </div>
-                        <div className="flex max-h-24 flex-wrap gap-2 overflow-y-auto">
-                          {group.values.map((label) => {
-                            const active = selectedCustomAudiences.some((audience) => audience.name === label)
-                            return (
-                              <button
-                                key={label}
-                                type="button"
-                                onClick={() => addTaxonomyAudience(label)}
-                                className={cn('rounded-full px-3 py-1.5 text-xs font-medium transition', active ? 'bg-slate-900 text-white' : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:ring-blue-200')}
-                              >
-                                {label}
-                              </button>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    ))}
                   </div>
                   <div className="mt-5 rounded-xl border border-slate-200 bg-white p-3">
                     <div className="text-sm font-medium text-slate-900">已选标签</div>
@@ -784,6 +745,56 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                         </button>
                       ))}
                       {!selectedMetrics.length ? <span className="text-sm text-slate-400">请选择至少 1 个观察指标。</span> : null}
+                    </div>
+                  </div>
+                </Card>
+                <Card className="rounded-2xl p-5">
+                  <SectionTitle title="上传 PRD / 预览编辑" description="链接、文件上传和文档正文统一在这里维护，作为本次分析输入。" />
+                  <div className="mt-5 grid gap-4 md:grid-cols-2">
+                    <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-5">
+                      <div className="flex items-center gap-3">
+                        <Link2 className="h-5 w-5 text-blue-600" />
+                        <div>
+                          <div className="font-semibold text-slate-900">粘贴 PRD 链接</div>
+                          <div className="mt-1 text-sm text-slate-500">解析 PRD，智能提取关键信息</div>
+                        </div>
+                      </div>
+                      <div className="mt-4 flex gap-2">
+                        <Input className="bg-white" value={doc.prdLink} onChange={(event) => doc.setPrdLink(event.target.value)} placeholder="输入公开可访问的 PRD 链接" />
+                        <Button className="shrink-0 bg-blue-600 hover:bg-blue-700" disabled={doc.parseLinkMutation.isPending} onClick={doc.parseCurrentLink}>
+                          {doc.parseLinkMutation.isPending ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
+                          解析
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-white p-5" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); doc.uploadFile(event.dataTransfer.files[0]) }}>
+                      <div className="flex items-center gap-3">
+                        <FileText className="h-5 w-5 text-blue-600" />
+                        <div>
+                          <div className="font-semibold text-slate-900">上传本地文档</div>
+                          <div className="mt-1 text-sm text-slate-500">支持 PDF / DOCX / TXT / MD 格式</div>
+                        </div>
+                      </div>
+                      <label className="mt-4 flex w-full cursor-pointer items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">
+                        <Upload className="h-4 w-4" />
+                        {doc.parseFileMutation.isPending ? '正在解析...' : '点击或拖拽文件上传'}
+                        <input type="file" className="hidden" accept=".pdf,.docx,.txt,.md" onChange={(event) => doc.uploadFile(event.target.files?.[0])} />
+                      </label>
+                    </div>
+                  </div>
+                  {doc.documentNotice ? <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-700">{doc.documentNotice}</div> : null}
+                  <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="flex items-center justify-between text-xs font-medium text-slate-500"><span>{parseStatus.label}</span><span>{parseStatus.width}</span></div>
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-white"><div className={cn('h-full rounded-full transition-all', parseStatus.tone)} style={{ width: parseStatus.width }} /></div>
+                  </div>
+                  <div className="mt-5 grid gap-4">
+                    <div>
+                      <Label>文档标题</Label>
+                      <Input value={doc.effectiveDocumentTitle} onChange={(event) => doc.setDocumentTitle(event.target.value)} placeholder="当前 PRD 标题" />
+                    </div>
+                    <div>
+                      <Label>文档内容</Label>
+                      <Textarea rows={12} value={doc.effectiveDocumentContent} onChange={(event) => doc.setDocumentContent(event.target.value)} className="resize-y font-mono text-xs leading-6" />
                     </div>
                   </div>
                 </Card>
@@ -885,6 +896,28 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                       </div>
                     </div>
                     <div className={cn(isPopup ? 'flex max-h-32 flex-wrap gap-2 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-3' : 'space-y-3')}>
+                    {!isPopup ? (
+                      <div className="space-y-3">
+                        {visibleAudienceGroups.map((group) => (
+                          <div key={group.name} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                            <div className="mb-2 flex items-center justify-between">
+                              <div className="text-sm font-semibold text-slate-800">{group.name}</div>
+                              <div className="text-xs text-slate-400">{group.values.length}</div>
+                            </div>
+                            <div className="flex max-h-28 flex-wrap gap-2 overflow-y-auto">
+                              {group.values.map((label) => {
+                                const active = selectedCustomAudiences.some((audience) => audience.name === label)
+                                return (
+                                  <button key={label} type="button" onClick={() => addTaxonomyAudience(label)} className={cn('rounded-full px-3 py-1.5 text-xs font-medium transition', active ? 'bg-slate-900 text-white' : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:ring-blue-200')}>
+                                    {label}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                     {visibleAudiences.map((audience) => {
                       const active = selectedAudienceKeys.includes(audience.key)
                       const atLimit = !active && totalAudienceCount >= 5
@@ -1011,6 +1044,7 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                   <div className="mt-4 text-xs leading-5 text-slate-500">{totalAudienceCount}/5 个用户群</div>
                 </Card>
 
+                {isPopup ? (
                 <Card className={cn('mt-5 bg-slate-50 p-4 shadow-none', isPopup && 'rounded-lg border-0 bg-white p-0')}>
                   <div className="text-sm font-medium text-slate-900">观察指标选择</div>
                   <div className="mt-3 flex items-center gap-2 rounded-lg border border-blue-300 bg-white px-3 py-2 shadow-sm shadow-blue-100">
@@ -1060,6 +1094,7 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                     {!selectedMetrics.length ? <span className="text-sm text-slate-500">请至少选择 1 个观察指标。</span> : null}
                   </div>
                 </Card>
+                ) : null}
 
                 {detail && !isPopup ? (
                   <Card className="mt-4 p-4 shadow-none">

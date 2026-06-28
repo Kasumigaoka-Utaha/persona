@@ -51,6 +51,9 @@ class PredictionService:
         self.db.commit()
 
         try:
+            if (job.run_config or {}).get("job_type") == "modification_suggestions":
+                await self._run_modification_suggestion_job(job)
+                return
             payload = self._build_payload(job)
             job.stage = "module_analysis"
             self.db.commit()
@@ -88,6 +91,68 @@ class PredictionService:
             job.error_message = str(exc)
             job.finished_at = datetime.utcnow()
             self.db.commit()
+
+    async def _run_modification_suggestion_job(self, job: AnalysisJob) -> None:
+        job.stage = "suggestion_generation"
+        self.db.commit()
+        source_job_id = (job.run_config or {}).get("source_analysis_job_id")
+        source_job = self.db.get(AnalysisJob, source_job_id) if source_job_id else None
+        source_result = source_job.result.result_json if source_job and source_job.result else None
+        payload = self._build_payload(job)
+        suggestions = await self._generate_modification_suggestions(job, source_result, payload["selected_metrics"])
+        fallback_suggestions = self._fallback_modification_suggestions(job, source_result, payload["selected_metrics"])
+        audiences = source_result["report_meta"]["audiences"] if source_result else [audience["name"] for audience in payload["audiences"]]
+        try:
+            modules = suggestions["modules"]
+            notes = suggestions["notes"]
+            high_risk_modules = suggestions["high_risk_modules"]
+            if not modules or not notes:
+                raise ValueError("empty modification suggestions")
+            result_payload = JuryReportPayload(
+                report_meta={
+                    "document_title": job.document_title,
+                    "analyzed_at": datetime.now(timezone.utc),
+                    "audiences": audiences,
+                    "selected_metrics": payload["selected_metrics"],
+                    "scope_note": "基于快速反馈结果与原始 PRD 内容生成的修改建议。",
+                },
+                modules=modules,
+                comparison_table=[],
+                high_divergence_modules=[],
+                conclusion={
+                    "high_risk_modules": high_risk_modules,
+                    "high_divergence_modules": [],
+                    "covered_audiences": audiences,
+                },
+                confidence_notes=notes,
+            )
+        except Exception:
+            result_payload = JuryReportPayload(
+                report_meta={
+                    "document_title": job.document_title,
+                    "analyzed_at": datetime.now(timezone.utc),
+                    "audiences": audiences,
+                    "selected_metrics": payload["selected_metrics"],
+                    "scope_note": "基于快速反馈结果与原始 PRD 内容生成的修改建议。",
+                },
+                modules=fallback_suggestions["modules"],
+                comparison_table=[],
+                high_divergence_modules=[],
+                conclusion={
+                    "high_risk_modules": fallback_suggestions["high_risk_modules"],
+                    "high_divergence_modules": [],
+                    "covered_audiences": audiences,
+                },
+                confidence_notes=fallback_suggestions["notes"],
+            )
+        if job.result:
+            job.result.result_json = result_payload.model_dump(mode="json")
+        else:
+            self.db.add(AnalysisResult(analysis_job_id=job.id, result_json=result_payload.model_dump(mode="json")))
+        job.status = "succeeded"
+        job.stage = "completed"
+        job.finished_at = datetime.utcnow()
+        self.db.commit()
 
     def _build_payload(self, job: AnalysisJob) -> dict[str, Any]:
         modules = self._split_modules(job.document_content)
@@ -313,6 +378,86 @@ class PredictionService:
             data = response.json()
         content = data["choices"][0]["message"]["content"]
         return json.loads(content)
+
+    async def _generate_modification_suggestions(self, job: AnalysisJob, source_result: dict[str, Any] | None, selected_metrics: list[str]) -> dict[str, Any]:
+        fallback = self._fallback_modification_suggestions(job, source_result, selected_metrics)
+        prompt = {
+            "document": {
+                "title": job.document_title,
+                "content": job.document_content[:5000],
+            },
+            "quick_feedback_result": source_result,
+            "selected_metrics": selected_metrics,
+            "goal": "基于快速反馈结果和原始 PRD 内容，生成面向 PM 的修改建议。输出 JSON，不要复述完整报告。",
+            "schema": {
+                "modules": "array of modules, each with module_key/module_title/module_summary/audience_results",
+                "high_risk_modules": "array of module titles",
+                "notes": "array of concise PM-facing action suggestions",
+            },
+        }
+        try:
+            result = await self._call_model(prompt, "medium")
+            if not isinstance(result.get("modules"), list) or not isinstance(result.get("notes"), list):
+                return fallback
+            return {
+                "modules": result["modules"][:5],
+                "high_risk_modules": [str(item)[:80] for item in result.get("high_risk_modules", [])[:5]],
+                "notes": [str(item)[:240] for item in result["notes"][:8]],
+            }
+        except Exception:
+            return fallback
+
+    def _fallback_modification_suggestions(self, job: AnalysisJob, source_result: dict[str, Any] | None, selected_metrics: list[str]) -> dict[str, Any]:
+        modules = (source_result or {}).get("modules") or []
+        candidates: list[dict[str, Any]] = []
+        for module in modules:
+            for item in module.get("audience_results", []):
+                scores = item.get("selected_metric_scores") or item.get("metric_scores") or {}
+                score_values = [value for value in scores.values() if isinstance(value, int)]
+                score = max(score_values) if score_values else 50
+                candidates.append({"module": module, "item": item, "score": score})
+        candidates.sort(key=lambda value: value["score"], reverse=True)
+        if not candidates:
+            candidates = [{
+                "module": {"module_key": "document", "module_title": job.document_title, "module_summary": job.document_content[:200]},
+                "item": {
+                    "audience_key": "all",
+                    "audience_name": "目标用户",
+                    "behavior": {"will_do": "会先判断页面价值是否明确", "get_stuck_at": "核心说明不够直接", "wont_do": "不会继续深入理解复杂方案"},
+                    "risk_reason": "当前 PRD 需要进一步明确入口价值、用户路径和验证指标。",
+                },
+                "score": 60,
+            }]
+        suggestion_modules = []
+        notes = []
+        high_risk_modules = []
+        for index, candidate in enumerate(candidates[:5], start=1):
+            module = candidate["module"]
+            item = candidate["item"]
+            title = module.get("module_title", f"建议项 {index}")
+            high_risk_modules.append(title)
+            action = f"建议优先调整「{title}」：围绕 {item.get('audience_name', '目标用户')} 的卡点，补充直接价值说明、关键状态反馈和下一步行动入口。"
+            notes.append(action)
+            suggestion_modules.append({
+                "module_key": module.get("module_key", f"suggestion_{index}"),
+                "module_title": title,
+                "module_summary": action,
+                "audience_results": [{
+                    "audience_key": item.get("audience_key", "all"),
+                    "audience_name": item.get("audience_name", "目标用户"),
+                    "behavior": {
+                        "will_do": "修改后应能更快判断价值并完成下一步动作。",
+                        "get_stuck_at": item.get("behavior", {}).get("get_stuck_at", "核心说明不够直接"),
+                        "wont_do": "如果不调整，仍可能跳过或延后决策。",
+                    },
+                    "risk_ratings": {"ctr": "yellow", "uv": "yellow", "pv": "yellow"},
+                    "metric_scores": {"ctr": min(100, candidate["score"]), "uv": min(100, candidate["score"]), "pv": min(100, candidate["score"])},
+                    "selected_metric_ratings": {metric: "yellow" for metric in selected_metrics},
+                    "selected_metric_scores": {metric: min(100, candidate["score"]) for metric in selected_metrics},
+                    "risk_reason": action,
+                }],
+            })
+        return {"modules": suggestion_modules, "high_risk_modules": high_risk_modules, "notes": notes}
 
     def _sanitize_result(self, result: dict[str, Any], fallback: dict[str, Any], selected_metrics: list[str]) -> dict[str, Any]:
         if any(key in result for key in ("recommendations", "experiment_hypotheses", "metric_predictions")):

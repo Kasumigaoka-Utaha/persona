@@ -176,6 +176,37 @@ def rerun_analysis(
     return _serialize_job(db, job.id)
 
 
+@router.post("/analysis/{job_id}/modification-suggestions", response_model=AnalysisJobRead)
+def generate_modification_suggestions(
+    job_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+) -> AnalysisJobRead:
+    source_job = _get_job(db, job_id)
+    run_config = dict(source_job.run_config or {})
+    run_config.update({
+        "job_type": "modification_suggestions",
+        "source_analysis_job_id": source_job.id,
+        "model_reasoning_effort": "medium",
+    })
+    job = AnalysisJob(
+        status="queued",
+        stage="queued",
+        document_title=f"{source_job.document_title} 修改建议",
+        document_content=source_job.document_content,
+        host=source_job.host,
+        source_mode=source_job.source_mode,
+        selected_audience_keys=list(source_job.selected_audience_keys or []),
+        manual_audiences_json=list(source_job.manual_audiences_json or []),
+        run_config=run_config,
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    background_tasks.add_task(schedule_analysis_job, job.id, SessionLocal)
+    return _serialize_job(db, job.id)
+
+
 @router.get("/analysis/{job_id}", response_model=AnalysisJobRead)
 def get_analysis(job_id: int, db: Session = Depends(get_db)) -> AnalysisJobRead:
     return _serialize_job(db, job_id)

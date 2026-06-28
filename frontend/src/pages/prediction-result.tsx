@@ -185,6 +185,7 @@ function SuggestionCard({ module, item, index, metrics }: { module: ModuleReport
 export function PredictionResultPage() {
   const params = useParams()
   const jobId = Number(params.jobId)
+  const navigate = useNavigate()
 
   const query = useQuery({
     queryKey: ['analysis', jobId],
@@ -208,6 +209,11 @@ export function PredictionResultPage() {
       link.click()
       URL.revokeObjectURL(url)
     },
+  })
+
+  const suggestionMutation = useMutation({
+    mutationFn: () => api.generateModificationSuggestions(jobId),
+    onSuccess: (job) => navigate(`/suggestions/${job.id}`),
   })
 
   useEffect(() => {
@@ -302,8 +308,8 @@ export function PredictionResultPage() {
               <RotateCcw className="mr-2 h-4 w-4" />
               重新选择
             </GhostButton>
-            <Button className="bg-blue-600 hover:bg-blue-700">
-              <Sparkles className="mr-2 h-4 w-4" />
+            <Button className="bg-blue-600 hover:bg-blue-700" disabled={suggestionMutation.isPending} onClick={() => suggestionMutation.mutate()}>
+              {suggestionMutation.isPending ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
               生成修改建议
             </Button>
             <GhostButton onClick={() => exportMutation.mutate()} disabled={exportMutation.isPending}>
@@ -493,6 +499,13 @@ export function QuickFeedbackPage() {
     },
   })
 
+  const suggestionMutation = useMutation({
+    mutationFn: () => api.generateModificationSuggestions(jobId),
+    onSuccess: (job) => {
+      navigate(`/suggestions/${job.id}`)
+    },
+  })
+
   if (query.isLoading || !query.data) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-900/20">
@@ -620,14 +633,102 @@ export function QuickFeedbackPage() {
           <Link to="/popup">
             <GhostButton className="border-0 px-2 text-slate-500 hover:bg-transparent">回到 PRD</GhostButton>
           </Link>
-          <GhostButton>
-            <Wand2 className="mr-2 h-4 w-4" />
+          <GhostButton disabled={suggestionMutation.isPending} onClick={() => suggestionMutation.mutate()}>
+            {suggestionMutation.isPending ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
             生成修改建议
           </GhostButton>
           <Button className="bg-blue-600 hover:bg-blue-700" disabled={enterFullAnalysisMutation.isPending} onClick={() => enterFullAnalysisMutation.mutate()}>
             {enterFullAnalysisMutation.isPending ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
             进入完整分析
           </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export function ModificationSuggestionPage() {
+  const params = useParams()
+  const jobId = Number(params.jobId)
+  const query = useQuery({
+    queryKey: ['suggestions', jobId],
+    queryFn: () => api.getAnalysis(jobId),
+    enabled: Boolean(jobId),
+    refetchInterval: (queryState) => {
+      const data = queryState.state.data
+      if (!data) return 2000
+      return data.status === 'succeeded' || data.status === 'failed' ? false : 2000
+    },
+  })
+
+  useEffect(() => {
+    document.title = '用户陪审团修改建议'
+  }, [])
+
+  if (query.isLoading || !query.data) {
+    return <div className="flex min-h-screen items-center justify-center"><LoaderCircle className="h-8 w-8 animate-spin text-slate-500" /></div>
+  }
+
+  const job = query.data
+  const result = job.result
+
+  if (job.status !== 'succeeded' || !result) {
+    return (
+      <div className="mx-auto flex min-h-screen max-w-2xl items-center justify-center p-6">
+        <Card className="w-full p-8 text-center">
+          {job.status === 'failed' ? (
+            <>
+              <div className="text-lg font-semibold text-red-600">修改建议生成失败</div>
+              <div className="mt-2 text-sm text-slate-500">{job.error_message}</div>
+            </>
+          ) : (
+            <>
+              <LoaderCircle className="mx-auto h-8 w-8 animate-spin text-slate-500" />
+              <div className="mt-4 text-lg font-semibold text-slate-900">正在生成修改建议</div>
+              <div className="mt-1 text-sm text-slate-500">当前阶段：{job.stage}</div>
+            </>
+          )}
+        </Card>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-100 p-6">
+      <div className="mx-auto max-w-5xl rounded-3xl border border-white/80 bg-white/95 p-6 shadow-xl shadow-slate-900/10">
+        <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-5">
+          <div>
+            <Badge className="rounded-md bg-blue-50 text-blue-700">修改建议</Badge>
+            <h1 className="mt-3 text-2xl font-semibold text-slate-950">用户陪审团修改建议</h1>
+            <p className="mt-2 text-sm text-slate-500">{result.report_meta.scope_note}</p>
+          </div>
+          <Link to="/web">
+            <GhostButton>回到 PRD</GhostButton>
+          </Link>
+        </div>
+        <div className="mt-6 grid gap-4 lg:grid-cols-2">
+          {result.modules.map((module, index) => {
+            const item = module.audience_results[0]
+            return (
+              <Card key={module.module_key} className="rounded-2xl p-5 shadow-none">
+                <div className="flex items-center justify-between gap-3">
+                  <Badge className={index < 2 ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}>{index < 2 ? 'P0' : 'P1'}</Badge>
+                  <span className="text-xs text-slate-500">{item?.audience_name ?? '目标用户'}</span>
+                </div>
+                <div className="mt-3 text-lg font-semibold text-slate-950">{module.module_title}</div>
+                <div className="mt-3 text-sm leading-6 text-slate-600">{module.module_summary}</div>
+                <div className="mt-4 rounded-xl bg-slate-50 p-3 text-sm leading-6 text-slate-600">
+                  <span className="font-medium text-slate-900">建议落点：</span>{item?.risk_reason ?? '补充说明与关键行动入口。'}
+                </div>
+              </Card>
+            )
+          })}
+        </div>
+        <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <div className="font-semibold text-slate-900">执行摘要</div>
+          <div className="mt-3 grid gap-2 text-sm leading-6 text-slate-600">
+            {result.confidence_notes.map((note) => <div key={note}>- {note}</div>)}
+          </div>
         </div>
       </div>
     </div>
