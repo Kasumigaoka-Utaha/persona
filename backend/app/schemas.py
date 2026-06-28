@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 RiskGrade = Literal["red", "yellow", "green"]
 DivergenceLevel = Literal["high", "medium"]
+ReasoningEffort = Literal["low", "medium", "high"]
 
 
 class BehaviorSummary(BaseModel):
@@ -69,6 +70,11 @@ class AnalysisRunRequest(BaseModel):
     selected_audience_keys: list[str] = Field(default_factory=list)
     manual_audiences: list[ManualAudienceInput] = Field(default_factory=list)
     selected_metrics: list[str] = Field(default_factory=list)
+    model_reasoning_effort: ReasoningEffort = "medium"
+
+
+class AnalysisRerunRequest(BaseModel):
+    model_reasoning_effort: ReasoningEffort = "medium"
 
 
 class BehaviorPrediction(BaseModel):

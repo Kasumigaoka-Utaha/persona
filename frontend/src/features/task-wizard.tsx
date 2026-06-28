@@ -203,6 +203,7 @@ export function TaskWizardPage() {
         selected_audience_keys: selectedBackendKeys,
         manual_audiences: [...fallbackManualAudiences, ...manualAudiences],
         selected_metrics: selectedMetrics,
+        model_reasoning_effort: 'medium',
       })
     },
     onSuccess: async (job) => {

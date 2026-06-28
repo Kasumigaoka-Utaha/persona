@@ -93,6 +93,7 @@ class PredictionService:
         modules = self._split_modules(job.document_content)
         audiences = self._load_audiences(job.selected_audience_keys, job.manual_audiences_json)
         selected_metrics = self._load_selected_metrics(job.run_config)
+        model_reasoning_effort = self._load_reasoning_effort(job.run_config)
         return {
             "job": {
                 "id": job.id,
@@ -103,6 +104,7 @@ class PredictionService:
             "modules": modules,
             "audiences": audiences,
             "selected_metrics": selected_metrics,
+            "model_reasoning_effort": model_reasoning_effort,
         }
 
     def _load_selected_metrics(self, run_config: dict[str, Any] | None) -> list[str]:
@@ -113,6 +115,10 @@ class PredictionService:
             if text and text not in metrics:
                 metrics.append(text[:40])
         return metrics or DEFAULT_METRICS
+
+    def _load_reasoning_effort(self, run_config: dict[str, Any] | None) -> str:
+        value = str((run_config or {}).get("model_reasoning_effort") or "medium").strip().lower()
+        return value if value in {"low", "medium", "high"} else "medium"
 
     def _load_audiences(self, keys: list[str], manual_items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         audiences: list[dict[str, Any]] = []
@@ -222,7 +228,7 @@ class PredictionService:
         for module in payload["modules"]:
             audience_results = []
             for audience in payload["audiences"]:
-                result = await self._analyze_module_audience(payload["job"], module, audience, payload["selected_metrics"])
+                result = await self._analyze_module_audience(payload["job"], module, audience, payload["selected_metrics"], payload["model_reasoning_effort"])
                 audience_results.append(result)
             module_reports.append(
                 {
@@ -240,6 +246,7 @@ class PredictionService:
         module: dict[str, str],
         audience: dict[str, Any],
         selected_metrics: list[str],
+        model_reasoning_effort: str,
     ) -> dict[str, Any]:
         prompt = {
             "document": job_meta,
@@ -271,16 +278,16 @@ class PredictionService:
             },
         }
         fallback = self._fallback_module_audience(module, audience, selected_metrics)
-        result = await self._generate_json(prompt, fallback)
+        result = await self._generate_json(prompt, fallback, model_reasoning_effort)
         return self._sanitize_result(result, fallback, selected_metrics)
 
-    async def _generate_json(self, prompt: dict[str, Any], fallback: dict[str, Any]) -> dict[str, Any]:
+    async def _generate_json(self, prompt: dict[str, Any], fallback: dict[str, Any], model_reasoning_effort: str) -> dict[str, Any]:
         try:
-            return await self._call_model(prompt)
+            return await self._call_model(prompt, model_reasoning_effort)
         except Exception:
             return fallback
 
-    async def _call_model(self, prompt: dict[str, Any]) -> dict[str, Any]:
+    async def _call_model(self, prompt: dict[str, Any], model_reasoning_effort: str) -> dict[str, Any]:
         api_key = self.settings.openai_api_key
         if not api_key:
             raise PredictionError("Missing API key for model request")
@@ -289,6 +296,7 @@ class PredictionService:
             "model": self.settings.default_model,
             "temperature": 0.2,
             "max_tokens": 900,
+            "model_reasoning_effort": model_reasoning_effort,
             "response_format": {"type": "json_object"},
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},

@@ -13,6 +13,7 @@ from app.database import SessionLocal, get_db
 from app.models import AnalysisJob, AnalysisResult, AudienceDefinition, EventLog
 from app.schemas import (
     AnalysisJobRead,
+    AnalysisRerunRequest,
     AnalysisRunRequest,
     AudienceDefinitionRead,
     DemoDocumentResponse,
@@ -127,6 +128,7 @@ def run_analysis(
         "source_mode": payload.document.source_mode,
         "host": payload.document.host,
         "selected_metrics": payload.selected_metrics,
+        "model_reasoning_effort": payload.model_reasoning_effort,
     }
     job = AnalysisJob(
         status="queued",
@@ -138,6 +140,34 @@ def run_analysis(
         selected_audience_keys=selected_keys,
         manual_audiences_json=[item.model_dump() for item in payload.manual_audiences],
         run_config=safe_run_config,
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    background_tasks.add_task(schedule_analysis_job, job.id, SessionLocal)
+    return _serialize_job(db, job.id)
+
+
+@router.post("/analysis/{job_id}/rerun", response_model=AnalysisJobRead)
+def rerun_analysis(
+    job_id: int,
+    payload: AnalysisRerunRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+) -> AnalysisJobRead:
+    source_job = _get_job(db, job_id)
+    run_config = dict(source_job.run_config or {})
+    run_config["model_reasoning_effort"] = payload.model_reasoning_effort
+    job = AnalysisJob(
+        status="queued",
+        stage="queued",
+        document_title=source_job.document_title,
+        document_content=source_job.document_content,
+        host=source_job.host,
+        source_mode=source_job.source_mode,
+        selected_audience_keys=list(source_job.selected_audience_keys or []),
+        manual_audiences_json=list(source_job.manual_audiences_json or []),
+        run_config=run_config,
     )
     db.add(job)
     db.commit()

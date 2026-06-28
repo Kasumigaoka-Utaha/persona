@@ -1,6 +1,6 @@
 ﻿import { useEffect } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
   ArrowRight,
@@ -469,6 +469,7 @@ export function PredictionResultPage() {
 export function QuickFeedbackPage() {
   const params = useParams()
   const jobId = Number(params.jobId)
+  const navigate = useNavigate()
 
   const query = useQuery({
     queryKey: ['analysis', jobId],
@@ -484,6 +485,13 @@ export function QuickFeedbackPage() {
   useEffect(() => {
     document.title = '用户陪审团快速反馈'
   }, [])
+
+  const enterFullAnalysisMutation = useMutation({
+    mutationFn: () => api.rerunAnalysis(jobId, { model_reasoning_effort: 'medium' }),
+    onSuccess: (job) => {
+      navigate(`/analysis/${job.id}`)
+    },
+  })
 
   if (query.isLoading || !query.data) {
     return (
@@ -616,11 +624,10 @@ export function QuickFeedbackPage() {
             <Wand2 className="mr-2 h-4 w-4" />
             生成修改建议
           </GhostButton>
-          <Link to={`/analysis/${jobId}`}>
-            <Button className="bg-blue-600 hover:bg-blue-700">
-              进入完整分析
-            </Button>
-          </Link>
+          <Button className="bg-blue-600 hover:bg-blue-700" disabled={enterFullAnalysisMutation.isPending} onClick={() => enterFullAnalysisMutation.mutate()}>
+            {enterFullAnalysisMutation.isPending ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
+            进入完整分析
+          </Button>
         </div>
       </div>
     </div>

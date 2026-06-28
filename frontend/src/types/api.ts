@@ -31,6 +31,8 @@ export type DocumentInput = {
   source_mode: string
 }
 
+export type ModelReasoningEffort = 'low' | 'medium' | 'high'
+
 export type DemoDocument = {
   title: string
   content: string

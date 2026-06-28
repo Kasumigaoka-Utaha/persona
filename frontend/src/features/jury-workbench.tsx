@@ -362,6 +362,7 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
         selected_audience_keys: selectedBackendKeys,
         manual_audiences: [...fallbackManualAudiences, ...manualAudiences],
         selected_metrics: selectedMetrics,
+        model_reasoning_effort: target === 'quick' ? 'low' : 'medium',
       })
       return { job, target }
     },
