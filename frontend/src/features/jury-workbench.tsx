@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -239,9 +239,17 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
   const [metricDraftMeaning, setMetricDraftMeaning] = useState('')
   const [audienceSearch, setAudienceSearch] = useState('')
   const [metricSearch, setMetricSearch] = useState('')
+  const [webAudienceDropdownOpen, setWebAudienceDropdownOpen] = useState(false)
+  const [webMetricDropdownOpen, setWebMetricDropdownOpen] = useState(false)
+  const [popupAudienceDropdownOpen, setPopupAudienceDropdownOpen] = useState(false)
+  const [popupMetricDropdownOpen, setPopupMetricDropdownOpen] = useState(false)
   const [expandedTagGroups, setExpandedTagGroups] = useState<string[]>(['八大人群', '电商用户生命周期', '年龄'])
   const [editingCustomKey, setEditingCustomKey] = useState<string | null>(null)
   const [detail, setDetail] = useState<AudienceDetail | null>(null)
+  const webAudienceDropdownRef = useRef<HTMLDivElement | null>(null)
+  const webMetricDropdownRef = useRef<HTMLDivElement | null>(null)
+  const popupAudienceDropdownRef = useRef<HTMLDivElement | null>(null)
+  const popupMetricDropdownRef = useRef<HTMLDivElement | null>(null)
   const doc = useDocumentState()
   const audiencesQuery = useQuery({ queryKey: ['audiences'], queryFn: api.listAudiences })
   const isPopup = variant === 'popup'
@@ -249,6 +257,26 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
   useEffect(() => {
     void safeLogEvent('jury_capsule_exposed', { page: variant === 'popup' ? 'popup_workbench' : 'jury_workbench' })
   }, [variant])
+
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node
+      if (!webAudienceDropdownRef.current?.contains(target)) {
+        setWebAudienceDropdownOpen(false)
+      }
+      if (!webMetricDropdownRef.current?.contains(target)) {
+        setWebMetricDropdownOpen(false)
+      }
+      if (!popupAudienceDropdownRef.current?.contains(target)) {
+        setPopupAudienceDropdownOpen(false)
+      }
+      if (!popupMetricDropdownRef.current?.contains(target)) {
+        setPopupMetricDropdownOpen(false)
+      }
+    }
+    document.addEventListener('pointerdown', handlePointerDown)
+    return () => document.removeEventListener('pointerdown', handlePointerDown)
+  }, [])
 
   useEffect(() => {
     setDraft({
@@ -534,6 +562,26 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
     setComposerOpen(true)
   }
 
+  const openWebAudienceDropdown = () => {
+    setWebAudienceDropdownOpen(true)
+    setWebMetricDropdownOpen(false)
+  }
+
+  const openWebMetricDropdown = () => {
+    setWebMetricDropdownOpen(true)
+    setWebAudienceDropdownOpen(false)
+  }
+
+  const openPopupAudienceDropdown = () => {
+    setPopupAudienceDropdownOpen(true)
+    setPopupMetricDropdownOpen(false)
+  }
+
+  const openPopupMetricDropdown = () => {
+    setPopupMetricDropdownOpen(true)
+    setPopupAudienceDropdownOpen(false)
+  }
+
   const toggleExpandedTagGroup = (name: string) => {
     setExpandedTagGroups((current) => current.includes(name) ? current.filter((item) => item !== name) : [...current, name])
   }
@@ -765,21 +813,25 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                       )
                     })}
                   </div>
-                  <div className="mt-5 flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2">
-                    <Search className="h-4 w-4 text-slate-400" />
-                    <input
-                      value={audienceSearch}
-                      onChange={(event) => setAudienceSearch(event.target.value)}
-                      className="min-w-0 flex-1 border-0 bg-transparent text-sm outline-none placeholder:text-slate-400"
-                      placeholder="搜索分类标准或用户标签，例如：八大人群 / 小镇青年 / 写评新用户"
-                    />
-                    {audienceSearch ? (
-                      <button type="button" onClick={() => setAudienceSearch('')} className="text-slate-400 hover:text-slate-700">
-                        <X className="h-4 w-4" />
-                      </button>
-                    ) : null}
-                  </div>
-                  <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                  <div ref={webAudienceDropdownRef} className="relative mt-5">
+                    <div className="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2">
+                      <Search className="h-4 w-4 text-slate-400" />
+                      <input
+                        value={audienceSearch}
+                        onFocus={openWebAudienceDropdown}
+                        onClick={openWebAudienceDropdown}
+                        onChange={(event) => setAudienceSearch(event.target.value)}
+                        className="min-w-0 flex-1 border-0 bg-transparent text-sm outline-none placeholder:text-slate-400"
+                        placeholder="搜索分类标准或用户标签，例如：八大人群 / 小镇青年 / 写评新用户"
+                      />
+                      {audienceSearch ? (
+                        <button type="button" onClick={() => setAudienceSearch('')} className="text-slate-400 hover:text-slate-700">
+                          <X className="h-4 w-4" />
+                        </button>
+                      ) : null}
+                    </div>
+                    {webAudienceDropdownOpen ? (
+                    <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-30 grid max-h-80 gap-3 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-3 shadow-xl shadow-slate-900/10 lg:grid-cols-2">
                     {visibleAudienceGroups.map((group) => (
                       <div key={group.name} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
                         <div className="mb-2 flex items-center justify-between">
@@ -822,6 +874,8 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                       </div>
                     ) : null}
                   </div>
+                    ) : null}
+                  </div>
                   <div className="mt-5 rounded-xl border border-slate-200 bg-white p-3">
                     <div className="text-sm font-medium text-slate-900">已选标签</div>
                     <div className="mt-3 flex flex-wrap gap-2">
@@ -841,16 +895,25 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                       导入自定义指标组合
                     </GhostButton>
                   </div>
-                  <div className="mt-5 flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2">
-                    <Search className="h-4 w-4 text-slate-400" />
-                    <input value={metricSearch} onChange={(event) => setMetricSearch(event.target.value)} className="min-w-0 flex-1 border-0 bg-transparent text-sm outline-none placeholder:text-slate-400" placeholder="搜索观察指标，例如：DAU / 跳出率 / 7日留存率" />
-                    {metricSearch ? (
-                      <button type="button" onClick={() => setMetricSearch('')} className="text-slate-400 hover:text-slate-700">
-                        <X className="h-4 w-4" />
-                      </button>
-                    ) : null}
-                  </div>
-                  <div className="mt-4 grid gap-3 lg:grid-cols-3">
+                  <div ref={webMetricDropdownRef} className="relative mt-5">
+                    <div className="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2">
+                      <Search className="h-4 w-4 text-slate-400" />
+                      <input
+                        value={metricSearch}
+                        onFocus={openWebMetricDropdown}
+                        onClick={openWebMetricDropdown}
+                        onChange={(event) => setMetricSearch(event.target.value)}
+                        className="min-w-0 flex-1 border-0 bg-transparent text-sm outline-none placeholder:text-slate-400"
+                        placeholder="搜索观察指标，例如：DAU / 跳出率 / 7日留存率"
+                      />
+                      {metricSearch ? (
+                        <button type="button" onClick={() => setMetricSearch('')} className="text-slate-400 hover:text-slate-700">
+                          <X className="h-4 w-4" />
+                        </button>
+                      ) : null}
+                    </div>
+                    {webMetricDropdownOpen ? (
+                    <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-30 grid max-h-80 gap-3 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-3 shadow-xl shadow-slate-900/10 lg:grid-cols-3">
                     {visibleMetricGroups.map((group) => (
                       <div key={group.name} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
                         <div className="mb-2 text-sm font-semibold text-slate-800">{group.name}</div>
@@ -885,6 +948,8 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                           })}
                         </div>
                       </div>
+                    ) : null}
+                  </div>
                     ) : null}
                   </div>
                   <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3">
@@ -974,7 +1039,7 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
 
                 {!composerOpen ? (
                   <div className={cn('mt-5', isPopup ? 'space-y-5' : 'space-y-3')}>
-                    <div>
+                    <div ref={isPopup ? popupAudienceDropdownRef : undefined} className="relative">
                       <div className="mb-2 flex items-center justify-between gap-3">
                         <div className="text-sm font-semibold text-slate-900">用户标签选择</div>
                         <button type="button" onClick={openComposer} className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700">
@@ -986,6 +1051,8 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                         <Search className="h-4 w-4 text-slate-400" />
                         <input
                           value={audienceSearch}
+                          onFocus={isPopup ? openPopupAudienceDropdown : undefined}
+                          onClick={isPopup ? openPopupAudienceDropdown : undefined}
                           onChange={(event) => setAudienceSearch(event.target.value)}
                           className="min-w-0 flex-1 border-0 bg-transparent text-sm outline-none placeholder:text-slate-400"
                           placeholder="搜索或选择用户标签..."
@@ -996,45 +1063,47 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                           </button>
                         ) : null}
                       </div>
-                    </div>
-                    <div className={cn(isPopup ? 'max-h-60 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-3' : 'space-y-3')}>
-                    {isPopup ? (
-                      <div className="space-y-3">
-                        {popupAudienceGroups.map((group) => (
-                          <div key={group.name}>
-                            <div className="mb-2 flex items-center justify-between text-xs">
-                              <span className="font-semibold text-slate-700">{group.name}</span>
-                              <span className="text-slate-400">{group.values.length}</span>
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                              {group.values.map((label) => {
-                                const customAudience = customAudiences.find((audience) => audience.name === label)
-                                const customActive = customAudience ? selectedCustomKeys.includes(customAudience.key) : false
-                                const active = selectedAudienceKeys.includes(`taxonomy_${label}`) || customActive
-                                const atLimit = !active && totalAudienceCount >= 5
-                                return (
-                                  <button
-                                    key={`${group.name}-${label}`}
-                                    type="button"
-                                    disabled={atLimit}
-                                    onClick={() => customAudience ? void toggleCustomAudience(customAudience.key) : void toggleTaxonomyAudience(label)}
-                                    className={cn(
-                                      'rounded-full px-3 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed',
-                                      active ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-700 hover:bg-slate-300',
-                                      atLimit && 'opacity-50',
-                                    )}
-                                  >
-                                    {label}
-                                  </button>
-                                )
-                              })}
-                            </div>
+                      {isPopup && popupAudienceDropdownOpen ? (
+                        <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-40 max-h-60 overflow-y-auto rounded-lg border border-slate-200 bg-white p-3 shadow-xl shadow-slate-900/10">
+                          <div className="space-y-3">
+                            {popupAudienceGroups.map((group) => (
+                              <div key={group.name}>
+                                <div className="mb-2 flex items-center justify-between text-xs">
+                                  <span className="font-semibold text-slate-700">{group.name}</span>
+                                  <span className="text-slate-400">{group.values.length}</span>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  {group.values.map((label) => {
+                                    const customAudience = customAudiences.find((audience) => audience.name === label)
+                                    const customActive = customAudience ? selectedCustomKeys.includes(customAudience.key) : false
+                                    const active = selectedAudienceKeys.includes(`taxonomy_${label}`) || customActive
+                                    const atLimit = !active && totalAudienceCount >= 5
+                                    return (
+                                      <button
+                                        key={`${group.name}-${label}`}
+                                        type="button"
+                                        disabled={atLimit}
+                                        onClick={() => customAudience ? void toggleCustomAudience(customAudience.key) : void toggleTaxonomyAudience(label)}
+                                        className={cn(
+                                          'rounded-full px-3 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed',
+                                          active ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-700 hover:bg-slate-300',
+                                          atLimit && 'opacity-50',
+                                        )}
+                                      >
+                                        {label}
+                                      </button>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            ))}
+                            {!popupAudienceGroups.length ? <div className="py-6 text-center text-sm text-slate-500">没有匹配的用户标签</div> : null}
                           </div>
-                        ))}
-                        {!popupAudienceGroups.length ? <div className="py-6 text-center text-sm text-slate-500">没有匹配的用户标签</div> : null}
-                      </div>
-                    ) : null}
+                        </div>
+                      ) : null}
+                    </div>
                     {!isPopup ? (
+                    <div className="space-y-3">
                       <div className="space-y-3">
                         {visibleAudienceGroups.map((group) => (
                           <div key={group.name} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
@@ -1055,7 +1124,6 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                           </div>
                         ))}
                       </div>
-                    ) : null}
                     {!isPopup ? visibleAudiences.map((audience) => {
                       const active = selectedAudienceKeys.includes(audience.key)
                       const atLimit = !active && totalAudienceCount >= 5
@@ -1126,6 +1194,7 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                       )
                     }) : null}
                     </div>
+                    ) : null}
                   </div>
                 ) : (
                   <div className="mt-5 space-y-5">
@@ -1186,46 +1255,52 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                 {isPopup ? (
                 <Card className={cn('mt-5 bg-slate-50 p-4 shadow-none', isPopup && 'rounded-lg border-0 bg-white p-0')}>
                   <div className="text-sm font-medium text-slate-900">观察指标选择</div>
-                  <div className="mt-3 flex items-center gap-2 rounded-lg border border-blue-300 bg-white px-3 py-2 shadow-sm shadow-blue-100">
-                    <Search className="h-4 w-4 text-slate-400" />
-                    <input
-                      value={metricSearch}
-                      onChange={(event) => setMetricSearch(event.target.value)}
-                      className="min-w-0 flex-1 border-0 bg-transparent text-sm outline-none placeholder:text-slate-400"
-                      placeholder="搜索或选择指标..."
-                    />
-                    {metricSearch ? (
-                      <button type="button" onClick={() => setMetricSearch('')} className="text-slate-400 hover:text-slate-700">
-                        <X className="h-4 w-4" />
-                      </button>
-                    ) : null}
-                  </div>
-                  <div className="mt-3 max-h-40 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-3">
-                    <div className="space-y-3">
-                      {visibleMetricGroups.map((group) => (
-                        <div key={group.name}>
-                          <div className="mb-2 text-xs font-semibold text-slate-700">{group.name}</div>
-                          <div className="flex flex-wrap gap-2">
-                            {group.values.map((metric) => {
-                              const active = selectedMetrics.includes(metric)
-                              return (
-                                <button
-                                  key={metric}
-                                  type="button"
-                                  onClick={() => toggleMetric(metric)}
-                                  className={cn(
-                                    'rounded-full px-3 py-1.5 text-xs font-medium transition',
-                                    active ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-700 hover:bg-slate-300',
-                                  )}
-                                >
-                                  {metric}
-                                </button>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      ))}
+                  <div ref={popupMetricDropdownRef} className="relative mt-3">
+                    <div className="flex items-center gap-2 rounded-lg border border-blue-300 bg-white px-3 py-2 shadow-sm shadow-blue-100">
+                      <Search className="h-4 w-4 text-slate-400" />
+                      <input
+                        value={metricSearch}
+                        onFocus={openPopupMetricDropdown}
+                        onClick={openPopupMetricDropdown}
+                        onChange={(event) => setMetricSearch(event.target.value)}
+                        className="min-w-0 flex-1 border-0 bg-transparent text-sm outline-none placeholder:text-slate-400"
+                        placeholder="搜索或选择指标..."
+                      />
+                      {metricSearch ? (
+                        <button type="button" onClick={() => setMetricSearch('')} className="text-slate-400 hover:text-slate-700">
+                          <X className="h-4 w-4" />
+                        </button>
+                      ) : null}
                     </div>
+                    {popupMetricDropdownOpen ? (
+                      <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-40 max-h-40 overflow-y-auto rounded-lg border border-slate-200 bg-white p-3 shadow-xl shadow-slate-900/10">
+                        <div className="space-y-3">
+                          {visibleMetricGroups.map((group) => (
+                            <div key={group.name}>
+                              <div className="mb-2 text-xs font-semibold text-slate-700">{group.name}</div>
+                              <div className="flex flex-wrap gap-2">
+                                {group.values.map((metric) => {
+                                  const active = selectedMetrics.includes(metric)
+                                  return (
+                                    <button
+                                      key={metric}
+                                      type="button"
+                                      onClick={() => toggleMetric(metric)}
+                                      className={cn(
+                                        'rounded-full px-3 py-1.5 text-xs font-medium transition',
+                                        active ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-700 hover:bg-slate-300',
+                                      )}
+                                    >
+                                      {metric}
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {selectedMetrics.map((metric) => (
