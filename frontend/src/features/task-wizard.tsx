@@ -149,13 +149,17 @@ export function TaskWizardPage() {
   }
 
   const selectedFallbackAudiences = useMemo(
-    () => audienceSource.filter((item) => item.source === 'frontend_fallback' && selectedAudienceKeys.includes(item.key)),
-    [audienceSource, selectedAudienceKeys],
+    () => [...audienceSource, ...quickAudienceSource]
+      .filter((item, index, source) => source.findIndex((candidate) => candidate.key === item.key) === index)
+      .filter((item) => item.source === 'frontend_fallback' && selectedAudienceKeys.includes(item.key)),
+    [audienceSource, quickAudienceSource, selectedAudienceKeys],
   )
 
   const selectedAudiences = useMemo(
-    () => audienceSource.filter((item) => selectedAudienceKeys.includes(item.key)),
-    [audienceSource, selectedAudienceKeys],
+    () => [...audienceSource, ...quickAudienceSource]
+      .filter((item, index, source) => source.findIndex((candidate) => candidate.key === item.key) === index)
+      .filter((item) => selectedAudienceKeys.includes(item.key)),
+    [audienceSource, quickAudienceSource, selectedAudienceKeys],
   )
 
   const selectedCustomAudiences = useMemo(

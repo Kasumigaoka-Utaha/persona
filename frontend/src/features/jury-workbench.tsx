@@ -288,13 +288,17 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
   )
 
   const selectedFallbackAudiences = useMemo(
-    () => audienceSource.filter((item) => item.source === 'frontend_fallback' && selectedAudienceKeys.includes(item.key)),
-    [audienceSource, selectedAudienceKeys],
+    () => [...audienceSource, ...quickAudienceSource]
+      .filter((item, index, source) => source.findIndex((candidate) => candidate.key === item.key) === index)
+      .filter((item) => item.source === 'frontend_fallback' && selectedAudienceKeys.includes(item.key)),
+    [audienceSource, quickAudienceSource, selectedAudienceKeys],
   )
 
   const selectedAudiences = useMemo(
-    () => audienceSource.filter((item) => selectedAudienceKeys.includes(item.key)),
-    [audienceSource, selectedAudienceKeys],
+    () => [...audienceSource, ...quickAudienceSource]
+      .filter((item, index, source) => source.findIndex((candidate) => candidate.key === item.key) === index)
+      .filter((item) => selectedAudienceKeys.includes(item.key)),
+    [audienceSource, quickAudienceSource, selectedAudienceKeys],
   )
 
   const selectedTaxonomyLabels = useMemo(
@@ -1270,7 +1274,7 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                   </div>
                 )}
 
-                <Card className={cn('mt-5 bg-slate-50 p-4 shadow-none', isPopup && 'rounded-lg border-slate-200 bg-white p-3')}>
+                <Card className={cn('bg-slate-50 p-4 shadow-none', isPopup && composerOpen ? 'mt-0' : 'mt-5', isPopup && 'rounded-lg border-slate-200 bg-white p-3')}>
                   <div className="text-sm font-medium text-slate-900">当前已选用户群</div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {selectedAudiences.map((audience) => <Badge key={audience.key}>{audience.name}</Badge>)}
