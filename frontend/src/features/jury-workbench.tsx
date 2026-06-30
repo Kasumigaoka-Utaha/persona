@@ -21,7 +21,7 @@ import {
   X,
 } from 'lucide-react'
 import { api } from '../api'
-import { Badge, Button, Card, GhostButton, Input, Label, SectionTitle, Textarea } from '../components/ui'
+import { Button, Card, GhostButton, Input, Label, SectionTitle, Textarea } from '../components/ui'
 import type { AudienceDefinition, ManualAudienceInput } from '../types/api'
 import { cn } from '../lib/utils'
 import { FALLBACK_AUDIENCES, FALLBACK_DEMO_DOCUMENT } from '../data/fallbacks'
@@ -470,6 +470,57 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
     await safeLogEvent('jury_audience_selected', { audience_key: key, source: 'custom' })
   }
 
+  const removeAudience = (key: string) => {
+    setSelectedAudienceKeys((current) => current.filter((item) => item !== key))
+  }
+
+  const removeTaxonomyAudience = (label: string) => {
+    setSelectedAudienceKeys((current) => current.filter((item) => item !== `taxonomy_${label}`))
+  }
+
+  const removeCustomAudience = (key: string) => {
+    setSelectedCustomKeys((current) => current.filter((item) => item !== key))
+  }
+
+  const renderSelectedAudienceTags = (emptyClassName = 'text-sm text-slate-500') => (
+    <>
+      {selectedAudiences.map((audience) => (
+        <button
+          key={audience.key}
+          type="button"
+          onClick={() => removeAudience(audience.key)}
+          className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
+        >
+          {audience.name}
+          <X className="h-3 w-3" />
+        </button>
+      ))}
+      {selectedTaxonomyLabels.map((label) => (
+        <button
+          key={label}
+          type="button"
+          onClick={() => removeTaxonomyAudience(label)}
+          className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
+        >
+          {label}
+          <X className="h-3 w-3" />
+        </button>
+      ))}
+      {selectedCustomAudiences.map((audience) => (
+        <button
+          key={audience.key}
+          type="button"
+          onClick={() => removeCustomAudience(audience.key)}
+          className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
+        >
+          {audience.name}
+          <X className="h-3 w-3" />
+        </button>
+      ))}
+      {!selectedAudiences.length && !selectedTaxonomyLabels.length && !selectedCustomAudiences.length ? <span className={emptyClassName}>请选择 1-5 个用户标签。</span> : null}
+    </>
+  )
+
   const toggleDraftChip = (chip: string) => {
     setDraftChips((current) => current.includes(chip) ? current.filter((item) => item !== chip) : [...current, chip])
   }
@@ -593,7 +644,7 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
     setSelectedCustomKeys((current) => {
       const existing = customAudiences.find((item) => item.name === label)
       const targetKey = existing?.key ?? key
-      if (current.includes(targetKey)) return current
+      if (current.includes(targetKey)) return current.filter((item) => item !== targetKey)
       if (selectedAudienceKeys.length + current.length >= 5) return current
       return [...current, targetKey]
     })
@@ -878,7 +929,7 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                                 key={label}
                                 type="button"
                                 onClick={() => addTaxonomyAudience(label)}
-                                className={cn('rounded-full px-3 py-1.5 text-xs font-medium transition', active ? 'bg-slate-900 text-white' : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:ring-blue-200')}
+                                className={cn('rounded-full px-3 py-1.5 text-xs font-medium transition', active ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-100' : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:ring-blue-200')}
                               >
                                 {label}
                               </button>
@@ -897,7 +948,7 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                           {customAudiences.map((audience) => {
                             const active = selectedCustomKeys.includes(audience.key)
                             return (
-                              <button key={audience.key} type="button" onClick={() => void toggleCustomAudience(audience.key)} className={cn('rounded-full px-3 py-1.5 text-xs font-medium transition', active ? 'bg-violet-700 text-white' : 'bg-white text-violet-700 ring-1 ring-violet-100 hover:ring-violet-200')}>
+                              <button key={audience.key} type="button" onClick={() => void toggleCustomAudience(audience.key)} className={cn('rounded-full px-3 py-1.5 text-xs font-medium transition', active ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-100' : 'bg-white text-violet-700 ring-1 ring-violet-100 hover:ring-violet-200')}>
                                 {audience.name}
                               </button>
                             )
@@ -911,10 +962,7 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                   <div className="mt-5 rounded-xl border border-slate-200 bg-white p-3">
                     <div className="text-sm font-medium text-slate-900">已选标签</div>
                     <div className="mt-3 flex flex-wrap gap-2">
-                      {selectedAudiences.map((audience) => <Badge key={audience.key}>{audience.name}</Badge>)}
-                      {selectedTaxonomyLabels.map((label) => <Badge key={label}>{label}</Badge>)}
-                      {selectedCustomAudiences.map((audience) => <Badge key={audience.key} className="bg-violet-100 text-violet-700">{audience.name}</Badge>)}
-                      {!selectedAudiences.length && !selectedTaxonomyLabels.length && !selectedCustomAudiences.length ? <span className="text-sm text-slate-400">请选择 1-5 个用户标签。</span> : null}
+                      {renderSelectedAudienceTags('text-sm text-slate-400')}
                     </div>
                   </div>
                 </Card>
@@ -1119,7 +1167,7 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                                         onClick={() => customAudience ? void toggleCustomAudience(customAudience.key) : void toggleTaxonomyAudience(label)}
                                         className={cn(
                                           'rounded-full px-3 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed',
-                                          active ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-700 hover:bg-slate-300',
+                                          active ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-100' : 'bg-slate-200 text-slate-700 hover:bg-slate-300',
                                           atLimit && 'opacity-50',
                                         )}
                                       >
@@ -1148,7 +1196,7 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                               {group.values.map((label) => {
                                 const active = selectedCustomAudiences.some((audience) => audience.name === label)
                                 return (
-                                  <button key={label} type="button" onClick={() => addTaxonomyAudience(label)} className={cn('rounded-full px-3 py-1.5 text-xs font-medium transition', active ? 'bg-slate-900 text-white' : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:ring-blue-200')}>
+                                  <button key={label} type="button" onClick={() => addTaxonomyAudience(label)} className={cn('rounded-full px-3 py-1.5 text-xs font-medium transition', active ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-100' : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:ring-blue-200')}>
                                     {label}
                                   </button>
                                 )
@@ -1277,10 +1325,7 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                 <Card className={cn('bg-slate-50 p-4 shadow-none', isPopup && composerOpen ? 'mt-0' : 'mt-5', isPopup && 'rounded-lg border-slate-200 bg-white p-3')}>
                   <div className="text-sm font-medium text-slate-900">当前已选用户群</div>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {selectedAudiences.map((audience) => <Badge key={audience.key}>{audience.name}</Badge>)}
-                    {selectedTaxonomyLabels.map((label) => <Badge key={label}>{label}</Badge>)}
-                    {selectedCustomAudiences.map((audience) => <Badge key={audience.key} className="bg-violet-100 text-violet-700">{audience.name}</Badge>)}
-                    {!selectedAudiences.length && !selectedTaxonomyLabels.length && !selectedCustomAudiences.length ? <span className="text-sm text-slate-500">请至少选择 1 个用户群，建议 2-5 个。</span> : null}
+                    {renderSelectedAudienceTags()}
                   </div>
                   <div className="mt-4 text-xs leading-5 text-slate-500">{totalAudienceCount}/5 个用户群</div>
                 </Card>
