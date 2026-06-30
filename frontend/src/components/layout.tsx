@@ -12,7 +12,7 @@ export function AppLayout() {
             </div>
             <div>
               <div className="text-sm font-semibold">用户实时陪审团</div>
-              <div className="text-xs text-slate-500">Feishu PRD 陪审团 Demo</div>
+              <div className="text-xs text-slate-500">圈用户，洞察一键可得</div>
             </div>
           </Link>
         </div>

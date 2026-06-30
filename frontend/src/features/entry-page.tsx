@@ -12,7 +12,7 @@ export function EntryPage() {
           </div>
           <div>
             <div className="text-2xl font-semibold tracking-tight">用户实时陪审团</div>
-            <div className="text-sm text-slate-500">PRD 体验入口</div>
+            <div className="text-sm text-slate-500">圈用户，洞察一键可得</div>
           </div>
         </div>
 

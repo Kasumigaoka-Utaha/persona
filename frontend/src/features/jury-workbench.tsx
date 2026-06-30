@@ -1080,7 +1080,7 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                 </span>
                 <span className="max-md:hidden">
                   <span className="block text-sm font-semibold text-slate-900">用户陪审团</span>
-                  <span className="mt-1 block text-sm text-slate-500">选择标签或创建自定义用户标签</span>
+                  <span className="mt-1 block text-sm text-slate-500">圈用户，洞察一键可得</span>
                 </span>
               </button>
             ) : null}
@@ -1101,7 +1101,7 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                 </div>
                 </div>
 
-                <div className={cn(isPopup && 'overflow-y-auto px-4 pb-4')}>
+                <div className={cn(isPopup && 'flex-1 overflow-y-auto px-4', isPopup && !composerOpen && 'pb-4')}>
                 {!isPopup ? <Card className="mt-5 border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 shadow-none">
                   <div className="flex gap-3">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -1322,15 +1322,15 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                   </div>
                 )}
 
-                <Card className={cn('bg-slate-50 p-4 shadow-none', isPopup && composerOpen ? 'mt-0' : 'mt-5', isPopup && 'rounded-lg border-slate-200 bg-white p-3')}>
+                {isPopup && composerOpen ? null : <Card className={cn('bg-slate-50 p-4 shadow-none', isPopup && composerOpen ? 'mt-0' : 'mt-5', isPopup && 'rounded-lg border-slate-200 bg-white p-3')}>
                   <div className="text-sm font-medium text-slate-900">当前已选用户群</div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {renderSelectedAudienceTags()}
                   </div>
                   <div className="mt-4 text-xs leading-5 text-slate-500">{totalAudienceCount}/5 个用户群</div>
-                </Card>
+                </Card>}
 
-                {isPopup ? (
+                {isPopup && !composerOpen ? (
                 <Card className={cn('mt-5 bg-slate-50 p-4 shadow-none', isPopup && 'rounded-lg border-0 bg-white p-0')}>
                   <div className="text-sm font-medium text-slate-900">观察指标选择</div>
                   <div ref={popupMetricDropdownRef} className="relative mt-3">
