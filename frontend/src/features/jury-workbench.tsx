@@ -49,6 +49,16 @@ type TagGroup = {
   values: string[]
 }
 
+const SYSTEM_AUDIENCE_TAG_GROUPS: TagGroup[] = [
+  { name: '八大人群', values: ['小镇青年', '小镇中老年', 'genz', '精致妈妈', '新锐白领', '资深中产', '都市银发', '都市蓝领', '其他'] },
+  { name: '策略人群8分类', values: ['年轻中高消费力男性', '年轻中高消费力女性', '年长中高消费力男性', '年长中高消费力女性', '年轻低消费力男性', '年轻低消费力女性', '年长低消费力男性', '年长低消费力女性'] },
+  { name: '电商用户生命周期', values: ['潜客', '纯新客', '准新客当日复购', '准新客当日未复购', '老客低频复购', '老客低频无复购', '老客中频复购', '老客中频无复购', '老客高频复购', '老客高频无复购', '流失用户重新激活', '流失用户'] },
+  { name: '用户活跃度', values: ['活跃度1（低）', '活跃度2（中低）', '活跃度3（中高）', '活跃度4（高）'] },
+  { name: '电商用户职业标签', values: ['agriculture', 'blue_collar_industry', 'blue_collar_service', 'building_worker', 'delivery_man', 'driver', 'finance', 'inhouse_student', 'it', 'medical_staff', 'public_servant', 'repair_worker', 'restaurant', 'retail', 'teacher', 'white_collar', 'not_work'] },
+  { name: '写评行为', values: ['写评新用户', '30天未写评老用户', '30天写评1次老用户', '30天写评2次老用户', '30天写评3次老用户', '30天写评4次老用户', '30天写评5次及以上老用户'] },
+  { name: '写评质量', values: ['高订单低写评用户', '高写评高有用用户', '高写评低有用用户'] },
+]
+
 const ALL_TAG_GROUPS = CUSTOM_AUDIENCE_TAG_GROUPS
 
 const METRIC_GROUPS: TagGroup[] = [
@@ -311,8 +321,8 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
 
   const visibleAudienceGroups = useMemo(() => {
     const query = audienceSearch.trim()
-    if (!query) return CUSTOM_AUDIENCE_TAG_GROUPS
-    return CUSTOM_AUDIENCE_TAG_GROUPS
+    if (!query) return SYSTEM_AUDIENCE_TAG_GROUPS
+    return SYSTEM_AUDIENCE_TAG_GROUPS
       .map((group) => {
         const groupMatch = group.name.includes(query)
         const values = groupMatch ? group.values : group.values.filter((value) => value.includes(query))
@@ -343,7 +353,7 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
     if (!isPopup) return []
     const query = audienceSearch.trim()
     const customValues = customAudiences.map((audience) => audience.name)
-    return CUSTOM_AUDIENCE_TAG_GROUPS
+    return SYSTEM_AUDIENCE_TAG_GROUPS
       .map((group) => {
         const sourceValues = group.name === '其他标签' ? customValues : group.values
         const groupMatch = group.name.includes(query)
