@@ -43,7 +43,7 @@ class PredictionService:
         value = str((run_config or {}).get("ai_model_provider") or "").strip().lower()
         if value == "gpt":
             return "openai"
-        if value in {"deepseek", "gemini"}:
+        if value in {"deepseek", "gemini", "doubao"}:
             return value
         return None
 

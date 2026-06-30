@@ -531,6 +531,7 @@ export function QuickFeedbackPage() {
 
   const job = query.data
   const result = job.result
+  const backToPrdPath = job.run_config?.client_surface === 'popup' ? '/popup' : '/web'
 
   if (job.status !== 'succeeded' || !result) {
     return (
@@ -540,7 +541,7 @@ export function QuickFeedbackPage() {
             <>
               <div className="text-lg font-semibold text-red-600">生成失败</div>
               <div className="mt-2 text-sm text-slate-500">{job.error_message}</div>
-              <Link to="/popup">
+              <Link to={backToPrdPath}>
                 <GhostButton className="mt-5">回到 PRD</GhostButton>
               </Link>
             </>
@@ -641,7 +642,7 @@ export function QuickFeedbackPage() {
         </div>
 
         <div className="mt-6 flex flex-wrap items-center justify-end gap-3 border-t border-slate-200 pt-4">
-          <Link to="/popup">
+          <Link to={backToPrdPath}>
             <GhostButton className="border-0 px-2 text-slate-500 hover:bg-transparent">回到 PRD</GhostButton>
           </Link>
           <GhostButton disabled={suggestionMutation.isPending} onClick={() => suggestionMutation.mutate()}>

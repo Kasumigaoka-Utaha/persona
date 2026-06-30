@@ -431,6 +431,7 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
         selected_metrics: selectedMetrics,
         model_reasoning_effort: target === 'quick' ? 'low' : 'medium',
         ai_model_provider: selectedModelProvider,
+        client_surface: isPopup ? 'popup' : 'web',
       })
       return { job, target }
     },
@@ -611,9 +612,9 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
     : 'relative mx-auto max-w-6xl'
 
   const renderModelSelector = (compact = false) => (
-    <div className={cn('rounded-xl border border-slate-200 bg-white p-2', compact ? 'w-full' : 'min-w-[300px]')}>
+    <div className={cn('rounded-xl border border-slate-200 bg-white p-2', compact ? 'w-full' : 'min-w-[360px]')}>
       <div className="mb-2 px-1 text-xs font-medium text-slate-500">AI 模型</div>
-      <div className="grid grid-cols-3 gap-1">
+      <div className="grid grid-cols-4 gap-1">
         {AI_MODEL_OPTIONS.map((option) => {
           const active = selectedModelProvider === option.value
           return (

@@ -32,7 +32,7 @@ export type DocumentInput = {
 }
 
 export type ModelReasoningEffort = 'low' | 'medium' | 'high'
-export type AIModelProvider = 'deepseek' | 'gemini' | 'gpt'
+export type AIModelProvider = 'deepseek' | 'gemini' | 'gpt' | 'doubao'
 
 export type DemoDocument = {
   title: string

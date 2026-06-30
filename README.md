@@ -31,7 +31,7 @@ PMS_DEEPSEEK_MODEL=deepseek-v4-flash
 ```
 
 You can switch the backend AI provider by changing `PMS_AI_PROVIDER` and restarting the backend.
-The UI can also choose a model per analysis job: `deepseek`, `gemini`, or `gpt`. That per-job choice overrides `PMS_AI_PROVIDER`; the provider API key still must be configured in the backend environment.
+The UI can also choose a model per analysis job: `deepseek`, `doubao`, `gemini`, or `gpt`. That per-job choice overrides `PMS_AI_PROVIDER`; the provider API key still must be configured in the backend environment.
 
 DeepSeek example:
 

@@ -130,6 +130,7 @@ def run_analysis(
         "selected_metrics": payload.selected_metrics,
         "model_reasoning_effort": payload.model_reasoning_effort,
         "ai_model_provider": payload.ai_model_provider,
+        "client_surface": payload.client_surface,
     }
     job = AnalysisJob(
         status="queued",

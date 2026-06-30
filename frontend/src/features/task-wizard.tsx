@@ -208,6 +208,7 @@ export function TaskWizardPage() {
         selected_metrics: selectedMetrics,
         model_reasoning_effort: 'medium',
         ai_model_provider: selectedModelProvider,
+        client_surface: 'web',
       })
     },
     onSuccess: async (job) => {
@@ -365,9 +366,9 @@ export function TaskWizardPage() {
   }
 
   const renderModelSelector = () => (
-    <div className="min-w-[300px] rounded-xl border border-slate-200 bg-white p-2">
+    <div className="min-w-[360px] rounded-xl border border-slate-200 bg-white p-2">
       <div className="mb-2 px-1 text-xs font-medium text-slate-500">AI 模型</div>
-      <div className="grid grid-cols-3 gap-1">
+      <div className="grid grid-cols-4 gap-1">
         {AI_MODEL_OPTIONS.map((option) => {
           const active = selectedModelProvider === option.value
           return (

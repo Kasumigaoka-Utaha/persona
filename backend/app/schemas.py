@@ -9,7 +9,8 @@ from pydantic import BaseModel, Field
 RiskGrade = Literal["red", "yellow", "green"]
 DivergenceLevel = Literal["high", "medium"]
 ReasoningEffort = Literal["low", "medium", "high"]
-AIModelProvider = Literal["deepseek", "gemini", "gpt"]
+AIModelProvider = Literal["deepseek", "gemini", "gpt", "doubao"]
+ClientSurface = Literal["web", "popup"]
 
 
 class BehaviorSummary(BaseModel):
@@ -73,6 +74,7 @@ class AnalysisRunRequest(BaseModel):
     selected_metrics: list[str] = Field(default_factory=list)
     model_reasoning_effort: ReasoningEffort = "medium"
     ai_model_provider: AIModelProvider = "deepseek"
+    client_surface: ClientSurface = "web"
 
 
 class AnalysisRerunRequest(BaseModel):

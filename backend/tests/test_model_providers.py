@@ -91,6 +91,22 @@ def test_run_config_provider_overrides_environment_default() -> None:
     assert config.model == "gemini-custom"
 
 
+def test_run_config_doubao_overrides_environment_default() -> None:
+    service = PredictionService(db=None)  # type: ignore[arg-type]
+    service.settings = Settings(
+        ai_provider="openai",
+        openai_api_key="openai-key",
+        doubao_api_key="doubao-key",
+        doubao_model="doubao-model",
+    )
+
+    config = service._active_model_config({"ai_model_provider": "doubao"})
+
+    assert config.provider == "doubao"
+    assert config.api_key == "doubao-key"
+    assert config.model == "doubao-model"
+
+
 def test_missing_doubao_model_errors_clearly() -> None:
     service = PredictionService(db=None)  # type: ignore[arg-type]
     service.settings = Settings(ai_provider="doubao", doubao_api_key="doubao-key")
