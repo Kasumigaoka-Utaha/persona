@@ -25,9 +25,38 @@ cp .env.example .env
 编辑 `backend/.env`，至少补充：
 
 ```bash
-PMS_OPENAI_API_KEY=your_api_key
+PMS_AI_PROVIDER=deepseek
+PMS_DEEPSEEK_API_KEY=your_deepseek_key
+PMS_DEEPSEEK_MODEL=deepseek-v4-flash
+```
+
+You can switch the backend AI provider by changing `PMS_AI_PROVIDER` and restarting the backend.
+
+DeepSeek example:
+
+```bash
+PMS_AI_PROVIDER=deepseek
+PMS_DEEPSEEK_API_KEY=your_deepseek_key
+PMS_DEEPSEEK_BASE_URL=https://api.deepseek.com
+PMS_DEEPSEEK_MODEL=deepseek-v4-flash
+```
+
+Doubao / Volcengine Ark example:
+
+```bash
+PMS_AI_PROVIDER=doubao
+PMS_DOUBAO_API_KEY=your_ark_api_key
+PMS_DOUBAO_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
+PMS_DOUBAO_MODEL=your_doubao_or_ark_endpoint_model
+```
+
+OpenAI-compatible example:
+
+```bash
+PMS_AI_PROVIDER=openai
+PMS_OPENAI_API_KEY=your_openai_key
 PMS_OPENAI_BASE_URL=https://api.openai.com/v1
-PMS_DEFAULT_MODEL=gpt-4.1-mini
+PMS_OPENAI_MODEL=gpt-4.1-mini
 ```
 
 启动后端：
@@ -150,9 +179,9 @@ uvicorn app.main:app --host 0.0.0.0 --port $PORT
 至少配置：
 
 ```bash
-PMS_OPENAI_API_KEY=your_api_key
-PMS_OPENAI_BASE_URL=https://api.openai.com/v1
-PMS_DEFAULT_MODEL=gpt-4.1-mini
+PMS_AI_PROVIDER=deepseek
+PMS_DEEPSEEK_API_KEY=your_deepseek_key
+PMS_DEEPSEEK_MODEL=deepseek-v4-flash
 ```
 
 如果你准备继续使用 SQLite，请额外配置：
@@ -266,9 +295,9 @@ cp .env.example .env
 编辑 `.env`：
 
 ```bash
-PMS_OPENAI_API_KEY=your_api_key
-PMS_OPENAI_BASE_URL=https://api.openai.com/v1
-PMS_DEFAULT_MODEL=gpt-4.1-mini
+PMS_AI_PROVIDER=doubao
+PMS_DOUBAO_API_KEY=your_ark_api_key
+PMS_DOUBAO_MODEL=your_doubao_or_ark_endpoint_model
 ```
 
 启动：
@@ -330,9 +359,22 @@ location /api/ {
 ### Backend
 
 ```bash
-PMS_OPENAI_API_KEY=your_api_key
+PMS_AI_PROVIDER=deepseek
+PMS_DEEPSEEK_API_KEY=your_deepseek_key
+PMS_DEEPSEEK_BASE_URL=https://api.deepseek.com
+PMS_DEEPSEEK_MODEL=deepseek-v4-flash
+
+# or Doubao / Volcengine Ark
+PMS_AI_PROVIDER=doubao
+PMS_DOUBAO_API_KEY=your_ark_api_key
+PMS_DOUBAO_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
+PMS_DOUBAO_MODEL=your_doubao_or_ark_endpoint_model
+
+# or OpenAI-compatible
+PMS_AI_PROVIDER=openai
+PMS_OPENAI_API_KEY=your_openai_key
 PMS_OPENAI_BASE_URL=https://api.openai.com/v1
-PMS_DEFAULT_MODEL=gpt-4.1-mini
+PMS_OPENAI_MODEL=gpt-4.1-mini
 ```
 
 可选：

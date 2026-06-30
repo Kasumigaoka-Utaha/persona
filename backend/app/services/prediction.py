@@ -10,7 +10,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.config import get_settings
+from app.config import ActiveModelConfig, get_settings
 from app.models import AnalysisJob, AnalysisResult, AudienceDefinition
 from app.schemas import JuryReportPayload
 from app.services.aggregation import build_comparison_table, summarize_conclusion
@@ -47,7 +47,7 @@ class PredictionService:
         job.stage = "document_parsing"
         job.started_at = datetime.utcnow()
         job.error_message = None
-        job.model_name = self.settings.default_model
+        job.model_name = self._model_name_for_job()
         self.db.commit()
 
         try:
@@ -352,22 +352,41 @@ class PredictionService:
         except Exception:
             return fallback
 
-    async def _call_model(self, prompt: dict[str, Any], model_reasoning_effort: str) -> dict[str, Any]:
-        api_key = self.settings.openai_api_key
+    def _model_name_for_job(self) -> str:
+        try:
+            config = self.settings.active_model_config()
+        except ValueError:
+            return f"{self.settings.ai_provider.strip().lower()}:invalid"
+        return f"{config.provider}:{config.model or 'unconfigured'}"
+
+    def _validate_model_config(self, config: ActiveModelConfig) -> tuple[str, str]:
+        api_key = (config.api_key or "").strip()
+        model = (config.model or "").strip()
         if not api_key:
-            raise PredictionError("Missing API key for model request")
-        base_url = self.settings.openai_base_url.rstrip("/")
+            raise PredictionError(f"Missing {config.api_key_env} for {config.provider} model request")
+        if not model:
+            raise PredictionError(f"Missing {config.model_env} for {config.provider} model request")
+        return api_key, model
+
+    async def _call_model(self, prompt: dict[str, Any], model_reasoning_effort: str) -> dict[str, Any]:
+        try:
+            model_config = self.settings.active_model_config()
+        except ValueError as exc:
+            raise PredictionError(str(exc)) from exc
+        api_key, model = self._validate_model_config(model_config)
+        base_url = model_config.base_url.rstrip("/")
         payload = {
-            "model": self.settings.default_model,
+            "model": model,
             "temperature": 0.2,
             "max_tokens": 900,
-            "model_reasoning_effort": model_reasoning_effort,
             "response_format": {"type": "json_object"},
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": json.dumps(prompt, ensure_ascii=False)},
             ],
         }
+        if model_config.provider == "deepseek":
+            payload["reasoning_effort"] = model_reasoning_effort
         async with httpx.AsyncClient(timeout=self.settings.request_timeout_seconds) as client:
             response = await client.post(
                 f"{base_url}/chat/completions",

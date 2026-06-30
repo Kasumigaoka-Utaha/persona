@@ -7,9 +7,11 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
+      - key: PMS_AI_PROVIDER
+        value: openai
       - key: PMS_OPENAI_BASE_URL
-        value: https://www.highland-api.top/v1
-      - key: PMS_DEFAULT_MODEL
-        value: gpt-5.5
+        value: https://api.openai.com/v1
+      - key: PMS_OPENAI_MODEL
+        value: gpt-4.1-mini
       - key: PMS_OPENAI_API_KEY
-        value: sk-iaa1GrCU0gsaCe9vKSkWKW1DtJwqlB5wAWEvXzLQQ4jqZwdF
+        sync: false
