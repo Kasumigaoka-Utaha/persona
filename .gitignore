@@ -9,3 +9,4 @@ backend/persona_metric_simulator.db
 .DS_Store
 .env
 DEMO_TECH_SUMMARY.md
+figures/
