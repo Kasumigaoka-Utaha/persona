@@ -8,3 +8,7 @@ backend/persona_metric_simulator.db
 *.pyc
 .DS_Store
 .env
+.docx
+用户实时陪审团_PRD_副本.md
+用户实时陪审团_人格标签Prompt库.md
+DEMO_TECH_SUMMARY.md
