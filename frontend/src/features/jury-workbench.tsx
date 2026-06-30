@@ -1407,7 +1407,7 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                   </button>
                 </div>
                 <div className="overflow-y-auto px-6 py-5">
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid items-start gap-4 md:grid-cols-2">
                     {ALL_TAG_GROUPS.map((group) => {
                       const expanded = expandedTagGroups.includes(group.name)
                       return (
