@@ -39,6 +39,20 @@ class PredictionService:
         self.db = db
         self.settings = get_settings()
 
+    def _provider_from_run_config(self, run_config: dict[str, Any] | None) -> str | None:
+        value = str((run_config or {}).get("ai_model_provider") or "").strip().lower()
+        if value == "gpt":
+            return "openai"
+        if value in {"deepseek", "gemini"}:
+            return value
+        return None
+
+    def _active_model_config(self, run_config: dict[str, Any] | None = None) -> ActiveModelConfig:
+        provider = self._provider_from_run_config(run_config)
+        if provider:
+            return self.settings.model_config_for_provider(provider)
+        return self.settings.active_model_config()
+
     async def run_analysis_job(self, job_id: int) -> None:
         job = self.db.get(AnalysisJob, job_id)
         if not job:
@@ -47,7 +61,7 @@ class PredictionService:
         job.stage = "document_parsing"
         job.started_at = datetime.utcnow()
         job.error_message = None
-        job.model_name = self._model_name_for_job()
+        job.model_name = self._model_name_for_job(job.run_config)
         self.db.commit()
 
         try:
@@ -99,7 +113,7 @@ class PredictionService:
         source_job = self.db.get(AnalysisJob, source_job_id) if source_job_id else None
         source_result = source_job.result.result_json if source_job and source_job.result else None
         payload = self._build_payload(job)
-        suggestions = await self._generate_modification_suggestions(job, source_result, payload["selected_metrics"])
+        suggestions = await self._generate_modification_suggestions(job, source_result, payload["selected_metrics"], payload["run_config"])
         fallback_suggestions = self._fallback_modification_suggestions(job, source_result, payload["selected_metrics"])
         audiences = source_result["report_meta"]["audiences"] if source_result else [audience["name"] for audience in payload["audiences"]]
         try:
@@ -170,6 +184,7 @@ class PredictionService:
             "audiences": audiences,
             "selected_metrics": selected_metrics,
             "model_reasoning_effort": model_reasoning_effort,
+            "run_config": job.run_config or {},
         }
 
     def _load_selected_metrics(self, run_config: dict[str, Any] | None) -> list[str]:
@@ -293,7 +308,7 @@ class PredictionService:
         for module in payload["modules"]:
             audience_results = []
             for audience in payload["audiences"]:
-                result = await self._analyze_module_audience(payload["job"], module, audience, payload["selected_metrics"], payload["model_reasoning_effort"])
+                result = await self._analyze_module_audience(payload["job"], module, audience, payload["selected_metrics"], payload["model_reasoning_effort"], payload["run_config"])
                 audience_results.append(result)
             module_reports.append(
                 {
@@ -312,6 +327,7 @@ class PredictionService:
         audience: dict[str, Any],
         selected_metrics: list[str],
         model_reasoning_effort: str,
+        run_config: dict[str, Any],
     ) -> dict[str, Any]:
         prompt = {
             "document": job_meta,
@@ -343,20 +359,21 @@ class PredictionService:
             },
         }
         fallback = self._fallback_module_audience(module, audience, selected_metrics)
-        result = await self._generate_json(prompt, fallback, model_reasoning_effort)
+        result = await self._generate_json(prompt, fallback, model_reasoning_effort, run_config)
         return self._sanitize_result(result, fallback, selected_metrics)
 
-    async def _generate_json(self, prompt: dict[str, Any], fallback: dict[str, Any], model_reasoning_effort: str) -> dict[str, Any]:
+    async def _generate_json(self, prompt: dict[str, Any], fallback: dict[str, Any], model_reasoning_effort: str, run_config: dict[str, Any]) -> dict[str, Any]:
         try:
-            return await self._call_model(prompt, model_reasoning_effort)
+            return await self._call_model(prompt, model_reasoning_effort, run_config)
         except Exception:
             return fallback
 
-    def _model_name_for_job(self) -> str:
+    def _model_name_for_job(self, run_config: dict[str, Any] | None = None) -> str:
         try:
-            config = self.settings.active_model_config()
+            config = self._active_model_config(run_config)
         except ValueError:
-            return f"{self.settings.ai_provider.strip().lower()}:invalid"
+            provider = self._provider_from_run_config(run_config) or self.settings.ai_provider.strip().lower()
+            return f"{provider}:invalid"
         return f"{config.provider}:{config.model or 'unconfigured'}"
 
     def _validate_model_config(self, config: ActiveModelConfig) -> tuple[str, str]:
@@ -368,9 +385,9 @@ class PredictionService:
             raise PredictionError(f"Missing {config.model_env} for {config.provider} model request")
         return api_key, model
 
-    async def _call_model(self, prompt: dict[str, Any], model_reasoning_effort: str) -> dict[str, Any]:
+    async def _call_model(self, prompt: dict[str, Any], model_reasoning_effort: str, run_config: dict[str, Any] | None = None) -> dict[str, Any]:
         try:
-            model_config = self.settings.active_model_config()
+            model_config = self._active_model_config(run_config)
         except ValueError as exc:
             raise PredictionError(str(exc)) from exc
         api_key, model = self._validate_model_config(model_config)
@@ -385,7 +402,7 @@ class PredictionService:
                 {"role": "user", "content": json.dumps(prompt, ensure_ascii=False)},
             ],
         }
-        if model_config.provider == "deepseek":
+        if model_config.provider in {"deepseek", "gemini"}:
             payload["reasoning_effort"] = model_reasoning_effort
         async with httpx.AsyncClient(timeout=self.settings.request_timeout_seconds) as client:
             response = await client.post(
@@ -398,7 +415,7 @@ class PredictionService:
         content = data["choices"][0]["message"]["content"]
         return json.loads(content)
 
-    async def _generate_modification_suggestions(self, job: AnalysisJob, source_result: dict[str, Any] | None, selected_metrics: list[str]) -> dict[str, Any]:
+    async def _generate_modification_suggestions(self, job: AnalysisJob, source_result: dict[str, Any] | None, selected_metrics: list[str], run_config: dict[str, Any]) -> dict[str, Any]:
         fallback = self._fallback_modification_suggestions(job, source_result, selected_metrics)
         prompt = {
             "document": {
@@ -415,7 +432,7 @@ class PredictionService:
             },
         }
         try:
-            result = await self._call_model(prompt, "medium")
+            result = await self._call_model(prompt, "medium", run_config)
             if not isinstance(result.get("modules"), list) or not isinstance(result.get("notes"), list):
                 return fallback
             return {

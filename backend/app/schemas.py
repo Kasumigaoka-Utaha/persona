@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 RiskGrade = Literal["red", "yellow", "green"]
 DivergenceLevel = Literal["high", "medium"]
 ReasoningEffort = Literal["low", "medium", "high"]
+AIModelProvider = Literal["deepseek", "gemini", "gpt"]
 
 
 class BehaviorSummary(BaseModel):
@@ -71,10 +72,12 @@ class AnalysisRunRequest(BaseModel):
     manual_audiences: list[ManualAudienceInput] = Field(default_factory=list)
     selected_metrics: list[str] = Field(default_factory=list)
     model_reasoning_effort: ReasoningEffort = "medium"
+    ai_model_provider: AIModelProvider = "deepseek"
 
 
 class AnalysisRerunRequest(BaseModel):
     model_reasoning_effort: ReasoningEffort = "medium"
+    ai_model_provider: AIModelProvider | None = None
 
 
 class BehaviorPrediction(BaseModel):
@@ -169,6 +172,7 @@ class AnalysisJobRead(BaseModel):
     finished_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    run_config: dict[str, Any] | None = None
     result: JuryReportPayload | None = None
 
 

@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     deepseek_api_key: str | None = None
     deepseek_base_url: str = "https://api.deepseek.com"
     deepseek_model: str = "deepseek-v4-flash"
+    gemini_api_key: str | None = None
+    gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai"
+    gemini_model: str = "gemini-2.5-flash"
     request_timeout_seconds: int = 60
     cors_origins: list[str] = Field(
         default_factory=lambda: [
@@ -81,7 +84,19 @@ class Settings(BaseSettings):
                 model=self.deepseek_model,
                 model_env="PMS_DEEPSEEK_MODEL",
             )
-        raise ValueError("PMS_AI_PROVIDER must be one of: openai, doubao, deepseek")
+        if provider == "gemini":
+            return ActiveModelConfig(
+                provider=provider,
+                api_key=self.gemini_api_key,
+                api_key_env="PMS_GEMINI_API_KEY",
+                base_url=self.gemini_base_url,
+                model=self.gemini_model,
+                model_env="PMS_GEMINI_MODEL",
+            )
+        raise ValueError("PMS_AI_PROVIDER must be one of: openai, doubao, deepseek, gemini")
+
+    def model_config_for_provider(self, provider: str) -> ActiveModelConfig:
+        return self.model_copy(update={"ai_provider": provider}).active_model_config()
 
 
 @lru_cache

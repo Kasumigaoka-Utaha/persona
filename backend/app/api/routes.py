@@ -129,6 +129,7 @@ def run_analysis(
         "host": payload.document.host,
         "selected_metrics": payload.selected_metrics,
         "model_reasoning_effort": payload.model_reasoning_effort,
+        "ai_model_provider": payload.ai_model_provider,
     }
     job = AnalysisJob(
         status="queued",
@@ -158,6 +159,8 @@ def rerun_analysis(
     source_job = _get_job(db, job_id)
     run_config = dict(source_job.run_config or {})
     run_config["model_reasoning_effort"] = payload.model_reasoning_effort
+    if payload.ai_model_provider:
+        run_config["ai_model_provider"] = payload.ai_model_provider
     job = AnalysisJob(
         status="queued",
         stage="queued",
@@ -188,6 +191,7 @@ def generate_modification_suggestions(
         "job_type": "modification_suggestions",
         "source_analysis_job_id": source_job.id,
         "model_reasoning_effort": "medium",
+        "ai_model_provider": (source_job.run_config or {}).get("ai_model_provider", "deepseek"),
     })
     job = AnalysisJob(
         status="queued",
@@ -257,5 +261,6 @@ def _serialize_job(db: Session, job_id: int) -> AnalysisJobRead:
         finished_at=job.finished_at,
         created_at=job.created_at,
         updated_at=job.updated_at,
+        run_config=job.run_config,
         result=result,
     )

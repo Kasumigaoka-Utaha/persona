@@ -32,6 +32,7 @@ export type DocumentInput = {
 }
 
 export type ModelReasoningEffort = 'low' | 'medium' | 'high'
+export type AIModelProvider = 'deepseek' | 'gemini' | 'gpt'
 
 export type DemoDocument = {
   title: string
@@ -143,5 +144,6 @@ export type AnalysisJob = {
   finished_at?: string | null
   created_at: string
   updated_at: string
+  run_config?: Record<string, unknown> | null
   result?: JuryReportPayload | null
 }

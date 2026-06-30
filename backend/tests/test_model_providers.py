@@ -59,12 +59,59 @@ def test_openai_keeps_default_model_fallback() -> None:
     assert config.model == "legacy-model"
 
 
+def test_run_config_gpt_maps_to_openai_provider() -> None:
+    service = PredictionService(db=None)  # type: ignore[arg-type]
+    service.settings = Settings(
+        ai_provider="deepseek",
+        openai_api_key="openai-key",
+        openai_model="gpt-model",
+        deepseek_api_key="deepseek-key",
+    )
+
+    config = service._active_model_config({"ai_model_provider": "gpt"})
+
+    assert config.provider == "openai"
+    assert config.api_key == "openai-key"
+    assert config.model == "gpt-model"
+
+
+def test_run_config_provider_overrides_environment_default() -> None:
+    service = PredictionService(db=None)  # type: ignore[arg-type]
+    service.settings = Settings(
+        ai_provider="openai",
+        openai_api_key="openai-key",
+        gemini_api_key="gemini-key",
+        gemini_model="gemini-custom",
+    )
+
+    config = service._active_model_config({"ai_model_provider": "gemini"})
+
+    assert config.provider == "gemini"
+    assert config.api_key == "gemini-key"
+    assert config.model == "gemini-custom"
+
+
 def test_missing_doubao_model_errors_clearly() -> None:
     service = PredictionService(db=None)  # type: ignore[arg-type]
     service.settings = Settings(ai_provider="doubao", doubao_api_key="doubao-key")
 
     with pytest.raises(PredictionError, match="PMS_DOUBAO_MODEL"):
         asyncio.run(service._call_model({"prompt": "test"}, "medium"))
+
+
+def test_active_model_config_reads_gemini_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("PMS_AI_PROVIDER", "gemini")
+    monkeypatch.setenv("PMS_GEMINI_API_KEY", "gemini-key")
+    monkeypatch.setenv("PMS_GEMINI_MODEL", "gemini-custom")
+
+    config = get_settings().active_model_config()
+
+    assert config.provider == "gemini"
+    assert config.api_key == "gemini-key"
+    assert config.base_url == "https://generativelanguage.googleapis.com/v1beta/openai"
+    assert config.model == "gemini-custom"
+    get_settings.cache_clear()
 
 
 def test_deepseek_payload_uses_provider_url_and_reasoning_effort(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -105,4 +152,24 @@ def test_doubao_payload_uses_ark_url_without_reasoning_effort(monkeypatch: pytes
     assert call["headers"]["Authorization"] == "Bearer doubao-key"
     assert call["json"]["model"] == "doubao-endpoint-model"
     assert "reasoning_effort" not in call["json"]
+    assert "model_reasoning_effort" not in call["json"]
+
+
+def test_gemini_payload_uses_openai_compatible_url_and_reasoning_effort(monkeypatch: pytest.MonkeyPatch) -> None:
+    FakeAsyncClient.calls = []
+    monkeypatch.setattr(prediction.httpx, "AsyncClient", FakeAsyncClient)
+    service = PredictionService(db=None)  # type: ignore[arg-type]
+    service.settings = Settings(
+        ai_provider="gemini",
+        gemini_api_key="gemini-key",
+        gemini_model="gemini-2.5-flash",
+    )
+
+    asyncio.run(service._call_model({"prompt": "test"}, "medium"))
+
+    call = FakeAsyncClient.calls[0]
+    assert call["url"] == "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+    assert call["headers"]["Authorization"] == "Bearer gemini-key"
+    assert call["json"]["model"] == "gemini-2.5-flash"
+    assert call["json"]["reasoning_effort"] == "medium"
     assert "model_reasoning_effort" not in call["json"]

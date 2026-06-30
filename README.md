@@ -31,6 +31,7 @@ PMS_DEEPSEEK_MODEL=deepseek-v4-flash
 ```
 
 You can switch the backend AI provider by changing `PMS_AI_PROVIDER` and restarting the backend.
+The UI can also choose a model per analysis job: `deepseek`, `gemini`, or `gpt`. That per-job choice overrides `PMS_AI_PROVIDER`; the provider API key still must be configured in the backend environment.
 
 DeepSeek example:
 
@@ -48,6 +49,15 @@ PMS_AI_PROVIDER=doubao
 PMS_DOUBAO_API_KEY=your_ark_api_key
 PMS_DOUBAO_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
 PMS_DOUBAO_MODEL=your_doubao_or_ark_endpoint_model
+```
+
+Gemini example:
+
+```bash
+PMS_AI_PROVIDER=gemini
+PMS_GEMINI_API_KEY=your_gemini_api_key
+PMS_GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
+PMS_GEMINI_MODEL=gemini-2.5-flash
 ```
 
 OpenAI-compatible example:
@@ -369,6 +379,12 @@ PMS_AI_PROVIDER=doubao
 PMS_DOUBAO_API_KEY=your_ark_api_key
 PMS_DOUBAO_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
 PMS_DOUBAO_MODEL=your_doubao_or_ark_endpoint_model
+
+# or Gemini
+PMS_AI_PROVIDER=gemini
+PMS_GEMINI_API_KEY=your_gemini_api_key
+PMS_GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
+PMS_GEMINI_MODEL=gemini-2.5-flash
 
 # or OpenAI-compatible
 PMS_AI_PROVIDER=openai

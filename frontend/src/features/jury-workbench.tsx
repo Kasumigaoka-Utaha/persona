@@ -26,6 +26,8 @@ import type { AudienceDefinition, ManualAudienceInput } from '../types/api'
 import { cn } from '../lib/utils'
 import { FALLBACK_AUDIENCES, FALLBACK_DEMO_DOCUMENT } from '../data/fallbacks'
 import { useWizardStore } from '../store/wizard'
+import { AI_MODEL_OPTIONS } from '../data/model-options'
+import type { AIModelProvider } from '../types/api'
 
 type DocumentSource = {
   host: string
@@ -233,6 +235,7 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
   const [juryOpen, setJuryOpen] = useState(false)
   const [draftChips, setDraftChips] = useState<string[]>([])
   const [selectedMetrics, setSelectedMetrics] = useState<string[]>(variant === 'popup' ? POPUP_METRICS.slice(0, 4) : METRICS.slice(0, 4))
+  const [selectedModelProvider, setSelectedModelProvider] = useState<AIModelProvider>('deepseek')
   const [customMetrics, setCustomMetrics] = useState<string[]>([])
   const [metricComposerOpen, setMetricComposerOpen] = useState(false)
   const [metricDraftName, setMetricDraftName] = useState('')
@@ -427,11 +430,12 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
         manual_audiences: [...fallbackManualAudiences, ...popupTaxonomyAudiences, ...manualAudiences],
         selected_metrics: selectedMetrics,
         model_reasoning_effort: target === 'quick' ? 'low' : 'medium',
+        ai_model_provider: selectedModelProvider,
       })
       return { job, target }
     },
     onSuccess: async ({ job, target }) => {
-      await safeLogEvent('jury_report_generated', { job_id: job.id, audience_count: totalAudienceCount, metrics: selectedMetrics })
+      await safeLogEvent('jury_report_generated', { job_id: job.id, audience_count: totalAudienceCount, metrics: selectedMetrics, model_provider: selectedModelProvider })
       navigate(target === 'full' ? `/analysis/${job.id}` : `/quick-feedback/${job.id}`)
     },
     onError: async (error) => {
@@ -605,6 +609,31 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
   const panelClass = isPopup
     ? 'relative min-h-screen overflow-hidden bg-[#f2f4f8]'
     : 'relative mx-auto max-w-6xl'
+
+  const renderModelSelector = (compact = false) => (
+    <div className={cn('rounded-xl border border-slate-200 bg-white p-2', compact ? 'w-full' : 'min-w-[300px]')}>
+      <div className="mb-2 px-1 text-xs font-medium text-slate-500">AI 模型</div>
+      <div className="grid grid-cols-3 gap-1">
+        {AI_MODEL_OPTIONS.map((option) => {
+          const active = selectedModelProvider === option.value
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => setSelectedModelProvider(option.value)}
+              className={cn(
+                'rounded-lg px-2 py-2 text-xs font-semibold transition',
+                active ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100',
+              )}
+              title={option.description}
+            >
+              {option.label}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
 
   return (
     <div className={shellClass}>
@@ -974,7 +1003,8 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                 <div className="text-sm font-medium text-slate-700">
                   已选择 {totalAudienceCount} 类陪审团，{selectedMetrics.length} 个观察指标，预计 30 秒生成快速反馈。
                 </div>
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  {renderModelSelector()}
                   <Button className="bg-blue-600 shadow-lg shadow-blue-600/20 hover:bg-blue-700" disabled={!canRun || runAnalysisMutation.isPending} onClick={() => runAnalysisMutation.mutate({ target: 'full' })} title={!canRun ? disabledReason : '进入完整分析'}>
                     {runAnalysisMutation.isPending ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <BarChart3 className="mr-2 h-4 w-4" />}
                     进入完整分析
@@ -1356,6 +1386,9 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                 <div className="border-t border-slate-200 bg-white px-4 py-3">
                   <div className="mb-3 text-xs text-slate-500">
                     已选择 {totalAudienceCount} 类陪审团，{selectedMetrics.length} 个观察指标。
+                  </div>
+                  <div className="mb-3">
+                    {renderModelSelector(true)}
                   </div>
                   <div className="flex items-center justify-between gap-3">
                     <GhostButton disabled={!canRun || runAnalysisMutation.isPending} onClick={() => runAnalysisMutation.mutate({ target: 'full' })} className="border-0 px-0 text-blue-700 hover:bg-transparent">

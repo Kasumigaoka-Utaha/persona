@@ -27,6 +27,8 @@ import { Badge, Button, Card, GhostButton, Input, Label, SectionTitle, Textarea 
 import type { AudienceDefinition, ManualAudienceInput } from '../types/api'
 import { cn } from '../lib/utils'
 import { FALLBACK_AUDIENCES, FALLBACK_DEMO_DOCUMENT } from '../data/fallbacks'
+import { AI_MODEL_OPTIONS } from '../data/model-options'
+import type { AIModelProvider } from '../types/api'
 
 type DocumentSource = {
   host: string
@@ -119,6 +121,7 @@ export function TaskWizardPage() {
   const [juryOpen, setJuryOpen] = useState(false)
   const [draftChips, setDraftChips] = useState<string[]>([])
   const [selectedMetrics, setSelectedMetrics] = useState<string[]>(METRICS.slice(0, 4))
+  const [selectedModelProvider, setSelectedModelProvider] = useState<AIModelProvider>('deepseek')
   const [editingCustomKey, setEditingCustomKey] = useState<string | null>(null)
   const [detail, setDetail] = useState<AudienceDetail | null>(null)
   const [documentTitle, setDocumentTitle] = useState<string | null>(null)
@@ -204,10 +207,11 @@ export function TaskWizardPage() {
         manual_audiences: [...fallbackManualAudiences, ...manualAudiences],
         selected_metrics: selectedMetrics,
         model_reasoning_effort: 'medium',
+        ai_model_provider: selectedModelProvider,
       })
     },
     onSuccess: async (job) => {
-      await safeLogEvent('jury_report_generated', { job_id: job.id, audience_count: totalAudienceCount, metrics: selectedMetrics })
+      await safeLogEvent('jury_report_generated', { job_id: job.id, audience_count: totalAudienceCount, metrics: selectedMetrics, model_provider: selectedModelProvider })
       navigate(`/analysis/${job.id}`)
     },
     onError: async (error) => {
@@ -359,6 +363,31 @@ export function TaskWizardPage() {
     setJuryOpen(true)
     setComposerOpen(true)
   }
+
+  const renderModelSelector = () => (
+    <div className="min-w-[300px] rounded-xl border border-slate-200 bg-white p-2">
+      <div className="mb-2 px-1 text-xs font-medium text-slate-500">AI 模型</div>
+      <div className="grid grid-cols-3 gap-1">
+        {AI_MODEL_OPTIONS.map((option) => {
+          const active = selectedModelProvider === option.value
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => setSelectedModelProvider(option.value)}
+              className={cn(
+                'rounded-lg px-2 py-2 text-xs font-semibold transition',
+                active ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100',
+              )}
+              title={option.description}
+            >
+              {option.label}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
 
   return (
     <div className="relative mx-auto max-w-6xl">
@@ -585,7 +614,8 @@ export function TaskWizardPage() {
               <div className="text-sm font-medium text-slate-700">
                 已选择 {totalAudienceCount} 类陪审团，{selectedMetrics.length} 个观察指标，预计 30 秒生成快速反馈。
               </div>
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap items-center gap-3">
+                {renderModelSelector()}
                 <Button
                   className="bg-blue-600 shadow-lg shadow-blue-600/20 hover:bg-blue-700"
                   disabled={!canRun || runAnalysisMutation.isPending}

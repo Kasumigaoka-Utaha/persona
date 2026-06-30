@@ -25,6 +25,7 @@ PMS_DEEPSEEK_MODEL=deepseek-v4-flash
 ```
 
 Switch providers by changing `PMS_AI_PROVIDER` and restarting the backend.
+The frontend can select `deepseek`, `gemini`, or `gpt` per analysis job. That job-level choice overrides `PMS_AI_PROVIDER`; keep the matching provider API key configured here.
 
 Doubao / Volcengine Ark:
 
@@ -33,6 +34,15 @@ PMS_AI_PROVIDER=doubao
 PMS_DOUBAO_API_KEY=your_ark_api_key
 PMS_DOUBAO_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
 PMS_DOUBAO_MODEL=your_doubao_or_ark_endpoint_model
+```
+
+Gemini:
+
+```bash
+PMS_AI_PROVIDER=gemini
+PMS_GEMINI_API_KEY=your_gemini_api_key
+PMS_GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
+PMS_GEMINI_MODEL=gemini-2.5-flash
 ```
 
 OpenAI-compatible:
