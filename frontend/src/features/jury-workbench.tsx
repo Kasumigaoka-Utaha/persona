@@ -27,6 +27,7 @@ import { cn } from '../lib/utils'
 import { FALLBACK_AUDIENCES, FALLBACK_DEMO_DOCUMENT } from '../data/fallbacks'
 import { useWizardStore } from '../store/wizard'
 import { AI_MODEL_OPTIONS } from '../data/model-options'
+import { buildQuickAudience, CUSTOM_AUDIENCE_TAG_GROUPS, QUICK_AUDIENCE_NAMES } from '../data/audience-tags'
 import type { AIModelProvider } from '../types/api'
 
 type DocumentSource = {
@@ -48,37 +49,7 @@ type TagGroup = {
   values: string[]
 }
 
-const TAG_GROUPS: TagGroup[] = [
-  { name: '年龄', values: ['18-24 岁', '25-34 岁', '35-44 岁', '45-54 岁', '55 岁以上'] },
-  { name: '城市', values: ['一线城市', '新一线城市', '二线城市', '三四线城市', '县城/乡镇'] },
-  { name: '月购买次数', values: ['0 次购买', '1-2 次购买', '3-5 次购买', '6-10 次购买', '10 次以上购买'] },
-  { name: '内容互动', values: ['从不互动', '偶尔点赞', '经常评论', '经常收藏/分享', '深度创作'] },
-  { name: '价格敏感度', values: ['价格低敏感', '价格中敏感', '价格高敏感', '极高价格敏感'] },
-  { name: '信任需求', values: ['低信任需求', '中信任需求', '高信任需求', '极高信任需求'] },
-  { name: '决策速度', values: ['慢决策', '理性比较', '快速决策', '冲动决策'] },
-  { name: '耐心程度', values: ['低耐心', '中耐心', '高耐心'] },
-  { name: '售后敏感度', values: ['低售后敏感', '中售后敏感', '高售后敏感'] },
-  { name: '评价依赖', values: ['不看评价', '参考评价', '重度依赖评价'] },
-  { name: '新功能接受度', values: ['保守', '观望', '愿意尝试', '尝鲜驱动'] },
-  { name: '隐私敏感度', values: ['低隐私敏感', '中隐私敏感', '高隐私敏感', '极高隐私敏感'] },
-]
-
-const AUDIENCE_TAXONOMY: TagGroup[] = [
-  { name: '八大人群', values: ['小镇青年', '小镇中老年', 'genz', '精致妈妈', '新锐白领', '资深中产', '都市银发', '都市蓝领', '其他'] },
-  { name: '策略人群8分类', values: ['年轻中高消费力男性', '年轻中高消费力女性', '年长中高消费力男性', '年长中高消费力女性', '年轻低消费力男性', '年轻低消费力女性', '年长低消费力男性', '年长低消费力女性'] },
-  { name: '电商用户生命周期', values: ['潜客', '纯新客', '准新客当日复购', '准新客当日未复购', '老客低频复购', '老客低频无复购', '老客中频复购', '老客中频无复购', '老客高频复购', '老客高频无复购', '流失用户重新激活', '流失用户'] },
-  { name: '用户活跃度', values: ['活跃度 1（低）', '活跃度 2（中低）', '活跃度 3（中高）', '活跃度 4（高）'] },
-  { name: '电商用户职业标签', values: ['agriculture', 'blue_collar_industry', 'blue_collar_service', 'building_worker', 'delivery_man', 'driver', 'finance', 'inhouse_student', 'it', 'medical_staff', 'public_servant', 'repair_worker', 'restaurant', 'retail', 'teacher', 'white_collar', 'not_work'] },
-  { name: '写评行为', values: ['写评新用户', '30天未写评老用户', '30天写评1次老用户', '30天写评2次老用户', '30天写评3次老用户', '30天写评4次老用户', '30天写评5次及以上老用户'] },
-  { name: '写评质量', values: ['高订单-低写评用户', '高写评-高有用用户', '高写评-低有用用户'] },
-]
-
-const POPUP_AUDIENCE_TAXONOMY: TagGroup[] = [
-  ...AUDIENCE_TAXONOMY,
-  { name: '其他标签', values: [] },
-]
-
-const ALL_TAG_GROUPS = [...TAG_GROUPS, ...AUDIENCE_TAXONOMY]
+const ALL_TAG_GROUPS = CUSTOM_AUDIENCE_TAG_GROUPS
 
 const METRIC_GROUPS: TagGroup[] = [
   { name: '核心规模指标', values: ['DAU（日活跃用户数）', 'WAU（周活跃用户数）', 'MAU（月活跃用户数）', 'MAC（月活跃客户数）', 'DAC（日活跃支付用户数）'] },
@@ -246,7 +217,7 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
   const [webMetricDropdownOpen, setWebMetricDropdownOpen] = useState(false)
   const [popupAudienceDropdownOpen, setPopupAudienceDropdownOpen] = useState(false)
   const [popupMetricDropdownOpen, setPopupMetricDropdownOpen] = useState(false)
-  const [expandedTagGroups, setExpandedTagGroups] = useState<string[]>(['八大人群', '电商用户生命周期', '年龄'])
+  const [expandedTagGroups, setExpandedTagGroups] = useState<string[]>(CUSTOM_AUDIENCE_TAG_GROUPS.slice(0, 3).map((group) => group.name))
   const [editingCustomKey, setEditingCustomKey] = useState<string | null>(null)
   const [detail, setDetail] = useState<AudienceDetail | null>(null)
   const webAudienceDropdownRef = useRef<HTMLDivElement | null>(null)
@@ -296,6 +267,16 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
     return data.length ? data : FALLBACK_AUDIENCES
   }, [audiencesQuery.data])
 
+  const quickAudiences = useMemo(
+    () => QUICK_AUDIENCE_NAMES.map((name, index) => buildQuickAudience(name, index)),
+    [],
+  )
+
+  const quickAudienceSource = useMemo(
+    () => quickAudiences.map((quickAudience) => audienceSource.find((audience) => audience.name === quickAudience.name) ?? quickAudience),
+    [audienceSource, quickAudiences],
+  )
+
   const selectedFallbackAudiences = useMemo(
     () => audienceSource.filter((item) => item.source === 'frontend_fallback' && selectedAudienceKeys.includes(item.key)),
     [audienceSource, selectedAudienceKeys],
@@ -330,8 +311,8 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
 
   const visibleAudienceGroups = useMemo(() => {
     const query = audienceSearch.trim()
-    if (!query) return AUDIENCE_TAXONOMY
-    return AUDIENCE_TAXONOMY
+    if (!query) return CUSTOM_AUDIENCE_TAG_GROUPS
+    return CUSTOM_AUDIENCE_TAG_GROUPS
       .map((group) => {
         const groupMatch = group.name.includes(query)
         const values = groupMatch ? group.values : group.values.filter((value) => value.includes(query))
@@ -362,7 +343,7 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
     if (!isPopup) return []
     const query = audienceSearch.trim()
     const customValues = customAudiences.map((audience) => audience.name)
-    return POPUP_AUDIENCE_TAXONOMY
+    return CUSTOM_AUDIENCE_TAG_GROUPS
       .map((group) => {
         const sourceValues = group.name === '其他标签' ? customValues : group.values
         const groupMatch = group.name.includes(query)
@@ -604,6 +585,13 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
     })
   }
 
+  const closeWebComposer = () => {
+    setEditingCustomKey(null)
+    setDraftChips([])
+    setComposerOpen(false)
+    setJuryOpen(false)
+  }
+
   const shellClass = isPopup
     ? 'min-h-screen bg-[#eef1f6] p-0 text-slate-900'
     : 'relative mx-auto max-w-6xl'
@@ -817,7 +805,7 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                     </GhostButton>
                   </div>
                   <div className="mt-5 grid gap-3 md:grid-cols-4">
-                    {audienceSource.slice(0, 4).map((audience, index) => {
+                    {quickAudienceSource.map((audience, index) => {
                       const active = selectedAudienceKeys.includes(audience.key)
                       return (
                         <button
@@ -1414,7 +1402,7 @@ export function JuryWorkbench({ variant = 'web' }: JuryWorkbenchProps) {
                     <h2 className="text-lg font-semibold text-slate-950">创建自定义标签组合</h2>
                     <p className="mt-1 text-sm text-slate-500">按属性组合用户标签，系统会生成本次分析使用的临时用户群。</p>
                   </div>
-                  <button type="button" onClick={() => { setEditingCustomKey(null); setDraftChips([]); setComposerOpen(false) }} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+                  <button type="button" onClick={closeWebComposer} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
                     <X className="h-5 w-5" />
                   </button>
                 </div>

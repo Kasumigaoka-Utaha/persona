@@ -28,6 +28,7 @@ import type { AudienceDefinition, ManualAudienceInput } from '../types/api'
 import { cn } from '../lib/utils'
 import { FALLBACK_AUDIENCES, FALLBACK_DEMO_DOCUMENT } from '../data/fallbacks'
 import { AI_MODEL_OPTIONS } from '../data/model-options'
+import { buildQuickAudience, CUSTOM_AUDIENCE_TAG_GROUPS, QUICK_AUDIENCE_NAMES } from '../data/audience-tags'
 import type { AIModelProvider } from '../types/api'
 
 type DocumentSource = {
@@ -44,20 +45,7 @@ type AudienceDetail =
   | { type: 'default'; audience: AudienceDefinition }
   | { type: 'custom'; audience: CustomAudience }
 
-const TAG_GROUPS = [
-  { name: '年龄', values: ['18-24 岁', '25-34 岁', '35-44 岁', '45-54 岁', '55 岁以上'] },
-  { name: '城市', values: ['一线城市', '新一线城市', '二线城市', '三四线城市', '县城/乡镇'] },
-  { name: '月购买次数', values: ['0 次购买', '1-2 次购买', '3-5 次购买', '6-10 次购买', '10 次以上购买'] },
-  { name: '内容互动', values: ['从不互动', '偶尔点赞', '经常评论', '经常收藏/分享', '深度创作'] },
-  { name: '价格敏感度', values: ['价格低敏感', '价格中敏感', '价格高敏感', '极高价格敏感'] },
-  { name: '信任需求', values: ['低信任需求', '中信任需求', '高信任需求', '极高信任需求'] },
-  { name: '决策速度', values: ['慢决策', '理性比较', '快速决策', '冲动决策'] },
-  { name: '耐心程度', values: ['低耐心', '中耐心', '高耐心'] },
-  { name: '售后敏感度', values: ['低售后敏感', '中售后敏感', '高售后敏感'] },
-  { name: '评价依赖', values: ['不看评价', '参考评价', '重度依赖评价'] },
-  { name: '新功能接受度', values: ['保守', '观望', '愿意尝试', '尝鲜驱动'] },
-  { name: '隐私敏感度', values: ['低隐私敏感', '中隐私敏感', '高隐私敏感', '极高隐私敏感'] },
-]
+const TAG_GROUPS = CUSTOM_AUDIENCE_TAG_GROUPS
 
 const METRICS = ['入口点击率', '发布完成率', '二跳流失率', '互动率', '留存意愿', '信任感']
 
@@ -141,6 +129,16 @@ export function TaskWizardPage() {
     const data = audiencesQuery.data ?? []
     return data.length ? data : FALLBACK_AUDIENCES
   }, [audiencesQuery.data])
+
+  const quickAudiences = useMemo(
+    () => QUICK_AUDIENCE_NAMES.map((name, index) => buildQuickAudience(name, index)),
+    [],
+  )
+
+  const quickAudienceSource = useMemo(
+    () => quickAudiences.map((quickAudience) => audienceSource.find((audience) => audience.name === quickAudience.name) ?? quickAudience),
+    [audienceSource, quickAudiences],
+  )
 
   const loadedDocument = documentQuery.data ?? (documentQuery.isError ? FALLBACK_DEMO_DOCUMENT : null)
   const effectiveDocumentTitle = documentTitle ?? loadedDocument?.title ?? ''
@@ -501,7 +499,7 @@ export function TaskWizardPage() {
               </button>
             </div>
             <div className="mt-5 grid gap-3 md:grid-cols-4">
-              {audienceSource.slice(0, 4).map((audience, index) => {
+              {quickAudienceSource.map((audience, index) => {
                 const active = selectedAudienceKeys.includes(audience.key)
                 return (
                   <button

@@ -96,6 +96,14 @@ function moduleTitle(module: ModuleReport) {
   return `${module.module_title.replace(/\s+/g, '')}：${topic || '内容概览'}`
 }
 
+function isProductDesignModule(module: ModuleReport) {
+  const text = `${module.module_title} ${module.module_summary}`.toLowerCase()
+  const excluded = /背景|目标|报告输出|输出报告|里程碑|版本规划|团队协作|附录|文档信息|数据口径|项目计划|排期/u
+  if (excluded.test(text)) return false
+  const included = /功能|入口|流程|页面|交互|转化|下单|支付|购物车|收藏|搜索|推荐|内容|权益|规则|展示|提示|反馈|按钮|表单|路径|产品|策略|体验/u
+  return included.test(text) || !excluded.test(text)
+}
+
 function getAffectedAudiences(result: JuryReportPayload, metrics: string[]) {
   return result.report_meta.audiences
     .map((audience) => {
@@ -107,7 +115,9 @@ function getAffectedAudiences(result: JuryReportPayload, metrics: string[]) {
 }
 
 function getSortedRisks(result: JuryReportPayload, metrics: string[]) {
-  return result.modules
+  const productModules = result.modules.filter(isProductDesignModule)
+  const modules = productModules.length ? productModules : result.modules
+  return modules
     .flatMap((module) => module.audience_results.map((item) => ({
       module,
       item,
@@ -117,9 +127,9 @@ function getSortedRisks(result: JuryReportPayload, metrics: string[]) {
 }
 
 function riskAdvice(module: ModuleReport, item?: AudienceModuleResult) {
-  if (!item) return '先补齐核心说明与状态反馈，再进入完整分析确认影响范围。'
-  if (item.behavior.get_stuck_at) return `优先降低「${item.behavior.get_stuck_at}」的理解成本。`
-  return item.risk_reason || module.module_summary || '优先补充价值说明、反馈状态和可信信息。'
+  if (!item) return '优先检查产品入口、核心流程和关键状态反馈，再进入完整分析确认影响范围。'
+  if (item.behavior.get_stuck_at) return `从产品设计上优先降低「${item.behavior.get_stuck_at}」的理解和操作成本。`
+  return item.risk_reason || module.module_summary || '优先补充产品价值说明、关键行动入口、状态反馈和可信信息。'
 }
 
 function attitudeCounts(result: JuryReportPayload, metrics: string[]) {
@@ -394,7 +404,7 @@ export function PredictionResultPage() {
                             <div className="h-3 overflow-hidden rounded-full bg-slate-100">
                               <div className={cn('h-full rounded-full', voteMeta[attitude].color)} style={{ width: item ? `${Math.max(18, score)}%` : '100%' }} />
                             </div>
-                            <div className={cn('mt-1 text-xs font-medium', voteMeta[attitude].text)}>{voteMeta[attitude].label}{item ? ` · ${score}` : ''}</div>
+                            <div className={cn('mt-1 text-xs font-medium', voteMeta[attitude].text)}>{voteMeta[attitude].label}{item ? ` · ${score}%` : ''}</div>
                           </td>
                         )
                       })}
